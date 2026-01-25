@@ -3,7 +3,9 @@ import {
   PanelSection, 
   PanelSectionRow, 
   staticClasses,
-  TextField
+  TextField,
+  ModalRoot,
+  showModal 
 } from "@decky/ui";
 import { definePlugin, callable, toaster } from "@decky/api";
 import { useState, FC } from "react";
@@ -12,68 +14,82 @@ import { FaGamepad } from "react-icons/fa";
 const restoreUdevWithPassword = callable<[string], any>("restore_udev_with_password");
 const checkStatus = callable<[], boolean>("check_status");
 
-const Content: FC = () => {
+// Modal Component
+const PasswordModal: FC<{ closeModal: () => void }> = ({ closeModal }) => {
   const [password, setPassword] = useState("");
-  const [isProcessing, setIsProcessing] = useState(false);
 
-  const handleRestore = async () => {
+  const handleSubmit = async () => {
     if (!password) return;
-    setIsProcessing(true);
-
+    
+    closeModal();
+    toaster.toast({ title: "Working...", body: "Restoring udev rules" });
+    
     try {
       const result = await restoreUdevWithPassword(password);
       toaster.toast({
         title: result.success ? "Success" : "Error",
         body: result.message,
       });
-      if (result.success) setPassword("");
     } catch (e) {
       toaster.toast({ title: "Error", body: "Backend communication failed" });
-    } finally {
-      setIsProcessing(false);
+    }
+  };
+
+  // Functie om Enter-toets af te vangen
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSubmit();
     }
   };
 
   return (
-    <PanelSection title="Controller Priority">
-      <PanelSectionRow>
-        <TextField
-          label="Sudo Password"
-          value={password}
-          bIsPassword={true}
-          onChange={(e: any) => setPassword(e.target.value)}
-        />
-      </PanelSectionRow>
+    <ModalRoot 
+      onCancel={closeModal} 
+      onAccept={handleSubmit}
+      acceptText="Restore"
+    >
+      <h1 style={{ marginBottom: "10px" }}>Enter Sudo Password</h1>
+      <p style={{ marginBottom: "20px" }}>The udev rules will be restored using this password.</p>
+      <TextField
+        label="Password"
+        value={password}
+        bIsPassword={true}
+        onChange={(e: any) => setPassword(e.target.value)}
+        focusOnMount={true}
+        // Vervang onOK door een standaard onKeyDown check
+        onKeyDown={handleKeyDown}
+      />
+    </ModalRoot>
+  );
+};
 
+const Content: FC = () => {
+  return (
+    <PanelSection title="Controller Priority">
       <PanelSectionRow>
         <ButtonItem 
           layout="below" 
-          onClick={handleRestore}
-          disabled={isProcessing || !password}
+          onClick={() => {
+            const modal = showModal(<PasswordModal closeModal={() => modal.Close()} />);
+          }}
         >
-          {isProcessing ? "Processing..." : "Restore Udev Rules"}
+          Restore Udev Rules
         </ButtonItem>
       </PanelSectionRow>
     </PanelSection>
   );
 }
 
-// We gebruiken geen argumenten in de functie om 'unused variable' errors te voorkomen
-// De popup-check doen we direct bij initialisatie.
 export default definePlugin(() => {
-  
-  // Voer de check uit
   checkStatus().then((isOk) => {
     if (!isOk) {
       toaster.toast({
         title: "Controller Priority",
-        body: "Udev rules are missing! Please open the plugin to restore them.",
+        body: "Udev rules missing! Click Restore in the plugin menu.",
         duration: 10000,
       });
     }
-  }).catch((e) => {
-    console.error("Startup check failed:", e);
-  });
+  }).catch(() => {});
 
   return {
     name: "ControllerPriority",
