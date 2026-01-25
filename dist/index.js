@@ -81,14 +81,17 @@ function IconBase(props) {
 }
 
 // THIS FILE IS AUTO GENERATED
-function FaGamepad (props) {
+function FaCheckCircle (props) {
+  return GenIcon({"attr":{"viewBox":"0 0 512 512"},"child":[{"tag":"path","attr":{"d":"M504 256c0 136.967-111.033 248-248 248S8 392.967 8 256 119.033 8 256 8s248 111.033 248 248zM227.314 387.314l184-184c6.248-6.248 6.248-16.379 0-22.627l-22.627-22.627c-6.248-6.249-16.379-6.249-22.628 0L216 308.118l-70.059-70.059c-6.248-6.248-16.379-6.248-22.628 0l-22.627 22.627c-6.248 6.248-6.248 16.379 0 22.627l104 104c6.249 6.249 16.379 6.249 22.628.001z"},"child":[]}]})(props);
+}function FaExclamationTriangle (props) {
+  return GenIcon({"attr":{"viewBox":"0 0 576 512"},"child":[{"tag":"path","attr":{"d":"M569.517 440.013C587.975 472.007 564.806 512 527.94 512H48.054c-36.937 0-59.999-40.055-41.577-71.987L246.423 23.985c18.467-32.009 64.72-31.951 83.154 0l239.94 416.028zM288 354c-25.405 0-46 20.595-46 46s20.595 46 46 46 46-20.595 46-46-20.595-46-46-46zm-43.673-165.346l7.418 136c.347 6.364 5.609 11.346 11.982 11.346h48.546c6.373 0 11.635-4.982 11.982-11.346l7.418-136c.375-6.874-5.098-12.654-11.982-12.654h-63.383c-6.884 0-12.356 5.78-11.981 12.654z"},"child":[]}]})(props);
+}function FaGamepad (props) {
   return GenIcon({"attr":{"viewBox":"0 0 640 512"},"child":[{"tag":"path","attr":{"d":"M480.07 96H160a160 160 0 1 0 114.24 272h91.52A160 160 0 1 0 480.07 96zM248 268a12 12 0 0 1-12 12h-52v52a12 12 0 0 1-12 12h-24a12 12 0 0 1-12-12v-52H84a12 12 0 0 1-12-12v-24a12 12 0 0 1 12-12h52v-52a12 12 0 0 1 12-12h24a12 12 0 0 1 12 12v52h52a12 12 0 0 1 12 12zm216 76a40 40 0 1 1 40-40 40 40 0 0 1-40 40zm64-96a40 40 0 1 1 40-40 40 40 0 0 1-40 40z"},"child":[]}]})(props);
 }
 
 const restoreUdevWithPassword = callable("restore_udev_with_password");
 const checkStatus = callable("check_status");
-// Modal Component
-const PasswordModal = ({ closeModal }) => {
+const PasswordModal = ({ closeModal, onRefresh }) => {
     const [password, setPassword] = SP_REACT.useState("");
     const handleSubmit = async () => {
         if (!password)
@@ -101,36 +104,49 @@ const PasswordModal = ({ closeModal }) => {
                 title: result.success ? "Success" : "Error",
                 body: result.message,
             });
+            onRefresh(); // Ververs de status in het hoofdmenu
         }
         catch (e) {
             toaster.toast({ title: "Error", body: "Backend communication failed" });
         }
     };
-    // Functie om Enter-toets af te vangen
-    const handleKeyDown = (e) => {
-        if (e.key === 'Enter') {
-            handleSubmit();
-        }
-    };
-    return (SP_JSX.jsxs(DFL.ModalRoot, { onCancel: closeModal, onAccept: handleSubmit, acceptText: "Restore", children: [SP_JSX.jsx("h1", { style: { marginBottom: "10px" }, children: "Enter Sudo Password" }), SP_JSX.jsx("p", { style: { marginBottom: "20px" }, children: "The udev rules will be restored using this password." }), SP_JSX.jsx(DFL.TextField, { label: "Password", value: password, bIsPassword: true, onChange: (e) => setPassword(e.target.value), focusOnMount: true, 
-                // Vervang onOK door een standaard onKeyDown check
-                onKeyDown: handleKeyDown })] }));
+    return (SP_JSX.jsxs(DFL.ModalRoot, { onCancel: closeModal, onAccept: handleSubmit, acceptText: "Restore", children: [SP_JSX.jsx("h1", { style: { marginBottom: "10px" }, children: "Enter Sudo Password" }), SP_JSX.jsx(DFL.TextField, { label: "Password", value: password, bIsPassword: true, onChange: (e) => setPassword(e.target.value), focusOnMount: true, onKeyDown: (e) => e.key === 'Enter' && handleSubmit() })] }));
 };
 const Content = () => {
-    return (SP_JSX.jsx(DFL.PanelSection, { title: "Controller Priority", children: SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => {
-                    const modal = DFL.showModal(SP_JSX.jsx(PasswordModal, { closeModal: () => modal.Close() }));
-                }, children: "Restore Udev Rules" }) }) }));
+    const [isOk, setIsOk] = SP_REACT.useState(null);
+    const [loading, setLoading] = SP_REACT.useState(false);
+    const refreshStatus = async () => {
+        setLoading(true);
+        try {
+            const status = await checkStatus();
+            setIsOk(status);
+        }
+        catch (e) {
+            console.error(e);
+        }
+        finally {
+            setLoading(false);
+        }
+    };
+    // Check de status zodra de plugin wordt geopend
+    SP_REACT.useEffect(() => {
+        refreshStatus();
+    }, []);
+    return (SP_JSX.jsxs(DFL.PanelSection, { title: "System Status", children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsxs("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between" }, children: [SP_JSX.jsx("div", { style: { display: "flex", alignItems: "center", gap: "10px" }, children: isOk === null ? (SP_JSX.jsx("span", { children: "Checking..." })) : isOk ? (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(FaCheckCircle, { color: "#66ff66" }), SP_JSX.jsx("span", { style: { color: "#66ff66" }, children: "Status: Active" })] })) : (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(FaExclamationTriangle, { color: "#ffcc00" }), SP_JSX.jsx("span", { style: { color: "#ffcc00" }, children: "Status: Missing" })] })) }), SP_JSX.jsx(DFL.ButtonItem, { layout: "inline", onClick: refreshStatus, disabled: loading, children: loading ? "..." : "Check" })] }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: isOk === true, onClick: () => {
+                        const modal = DFL.showModal(SP_JSX.jsx(PasswordModal, { onRefresh: refreshStatus, closeModal: () => modal.Close() }));
+                    }, children: isOk ? "Reinstall Rules" : "Restore Udev Rules" }) }), !isOk && isOk !== null && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { fontSize: "0.8em", color: "#ccc", fontStyle: "italic" }, children: "The udev rules are required to give external controllers priority." }) }))] }));
 };
 var index = definePlugin(() => {
-    checkStatus().then((isOk) => {
-        if (!isOk) {
+    // De opstart-toast laten we staan als extra waarschuwing
+    checkStatus().then((ok) => {
+        if (!ok) {
             toaster.toast({
                 title: "Controller Priority",
-                body: "Udev rules missing! Click Restore in the plugin menu.",
-                duration: 10000,
+                body: "Udev rules missing!",
+                duration: 5000,
             });
         }
-    }).catch(() => { });
+    });
     return {
         name: "ControllerPriority",
         titleView: SP_JSX.jsx("div", { className: DFL.staticClasses.Title, children: "Controller Priority" }),
