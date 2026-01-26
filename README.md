@@ -20,11 +20,10 @@ Hey if you like what I did with this, :beers: or a :pizza: would be nice :D
 ## Installation
 
 1.  Ensure you have [Decky Loader](https://github.com/SteamDeckHomebrew/decky-loader) installed.
-2.  Clone this repository into your plugins folder:
-    ```bash
-    ~/homebrew/plugins/ControllerPriority
-    ```
-3.  Restart your Steam Deck or the Decky service.
+2. Download the `ControllerPriority.zip` from the [Releases](#) page.
+3. Move the ZIP to `/home/deck/homebrew/plugins/`.
+4. Unzip the file so that the folder `ControllerPriority` is inside the `plugins` directory.
+5. Restart your Steam Deck or run `sudo systemctl restart plugin_loader.service` in terminal.
 
 ## Usage
 
