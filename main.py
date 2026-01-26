@@ -4,7 +4,7 @@ import datetime
 import glob
 
 class Plugin:
-    PLUGIN_DIR = "/home/deck/homebrew/plugins/ControllerPriority"
+    PLUGIN_DIR = os.path.dirname(os.path.realpath(__file__))
     LOG_FILE = "/tmp/disable-steam-controller.log"
 
     def log(self, msg: str):
@@ -23,7 +23,6 @@ class Plugin:
 
     def get_controller_ids(self):
         """Zoekt naar alle actieve HID poorten van de interne controller (3-3 of 1-1)."""
-        # Zoek naar alle HID interfaces op de bekende interne USB bussen
         paths = glob.glob("/sys/bus/usb/drivers/usbhid/3-3:*") + glob.glob("/sys/bus/usb/drivers/usbhid/1-1:*")
         return [os.path.basename(p) for p in paths]
 
@@ -33,28 +32,29 @@ class Plugin:
         return os.path.exists(target)
 
     async def check_bind_status(self):
-        """Controleert of er op dit moment controller IDs 'gebonden' zijn aan de driver."""
+        """Controleert of er op dit moment controller IDs 'gebonden' zijn."""
         ids = self.get_controller_ids()
         return len(ids) > 0
 
     async def toggle_controller(self, disable: bool):
-        """Directe sessie-toggle (bind/unbind) voor de interne controller."""
+        """Directe sessie-toggle. Blokkeert actie als udev rules ontbreken."""
+        if disable:
+            has_safety = await self.check_status()
+            if not has_safety:
+                self.log("Action blocked: No udev safety net installed.")
+                return False
+
         action = "unbind" if disable else "bind"
         
-        # Bij unbinden gebruiken we de actuele gevonden IDs. 
-        # Bij binden proberen we de standaard poorten van de Steam Deck (3-3 en 1-1 bussen).
         if disable:
             target_ids = self.get_controller_ids()
         else:
-            # We proberen alle mogelijke standaard IDs voor beide Deck revisies
             target_ids = ["3-3:1.0", "3-3:1.1", "3-3:1.2", "1-1:1.0", "1-1:1.1", "1-1:1.2"]
         
         success = True
         for dev_id in target_ids:
-            # Gebruik tee om sudo schrijfrechten naar sysfs te krijgen
             cmd = f"echo '{dev_id}' | sudo tee /sys/bus/usb/drivers/usbhid/{action}"
             res = subprocess.run(cmd, shell=True, env=self.get_clean_env(), capture_output=True)
-            # We loggen fouten maar gaan door voor de andere IDs
             if res.returncode != 0 and disable: 
                 self.log(f"Toggle failed for {dev_id}: {res.stderr}")
         
@@ -73,7 +73,6 @@ class Plugin:
             return {"success": False, "message": str(e)}
 
     async def uninstall_udev_rule(self, password: str):
-        # Verwijdert de rule en herlaadt udev zodat de controller direct weer werkt
         cmd = "sudo -S rm /etc/udev/rules.d/99-disable-steam-input.rules && sudo udevadm control --reload-rules && sudo udevadm trigger"
         try:
             process = subprocess.Popen(cmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=self.get_clean_env())

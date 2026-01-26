@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Bepaal het pad waar dit script staat
-PLUGIN_DIR="/home/deck/homebrew/plugins/ControllerPriority"
+PLUGIN_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 TEMPLATE="$PLUGIN_DIR/99-disable-steam-input.rules.bak"
 TARGET="/etc/udev/rules.d/99-disable-steam-input.rules"
 # Het pad naar het daadwerkelijke disable-script
