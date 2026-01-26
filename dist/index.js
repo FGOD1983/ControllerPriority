@@ -120,7 +120,6 @@ const PasswordModal = ({ closeModal, onRefresh, mode }) => {
             toaster.toast({ title: "Error", body: "Communication failed" });
         }
     };
-    // FIX: Vangt R2/Enter op zodat de modal direct verwerkt wordt
     const handleKeyDown = (e) => {
         if (e.key === 'Enter' && password) {
             handleSubmit();
@@ -155,13 +154,7 @@ const Content = () => {
     }, []);
     const handleInternalToggle = async () => {
         setIsToggling("internal");
-        const success = await toggleController(isBound, "internal");
-        if (success) {
-            toaster.toast({
-                title: "Internal Controller",
-                body: isBound ? "Hidden" : "Restored"
-            });
-        }
+        await toggleController(isBound, "internal");
         await refreshStatus();
         setIsToggling(null);
     };
@@ -169,10 +162,6 @@ const Content = () => {
         setIsToggling(id);
         const success = await toggleController(currentlyBound, id);
         if (success) {
-            toaster.toast({
-                title: "USB Port " + id,
-                body: currentlyBound ? "Unbinding..." : "Binding..."
-            });
             setTimeout(async () => {
                 await refreshStatus();
                 setIsToggling(null);
@@ -182,11 +171,21 @@ const Content = () => {
             setIsToggling(null);
         }
     };
-    const hasActiveExternal = externalCtrls.some(c => c.is_bound);
-    const canToggleInternal = isOk === true && (hasActiveExternal || !isBound);
+    // Logica voor veiligheid
+    const activeExternalCount = externalCtrls.filter(c => c.is_bound).length;
+    const canToggleInternal = isOk === true && activeExternalCount > 0;
+    // Mag je een externe controller unbinden? 
+    // Alleen als: de interne pad aan staat OF er nog een andere externe pad overblijft.
+    const canUnbindExternal = (ctrlIsBound) => {
+        if (!ctrlIsBound)
+            return true; // Opnieuw binden mag altijd
+        if (isBound)
+            return true; // Interne pad is aan, dus unbinden is veilig
+        return activeExternalCount > 1; // Interne pad is uit, dus alleen unbinden als er meer dan 1 is
+    };
     return (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsxs(DFL.PanelSection, { title: "Setup & Safety", children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsxs("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between" }, children: [SP_JSX.jsxs("div", { style: { display: "flex", alignItems: "center", gap: "10px" }, children: [isOk ? SP_JSX.jsx(FaCheckCircle, { color: "#66ff66" }) : SP_JSX.jsx(FaExclamationTriangle, { color: "#ffcc00" }), SP_JSX.jsx("span", { style: { fontSize: "0.9em" }, children: isOk ? "Safety Active" : "Setup Required" })] }), SP_JSX.jsx(DFL.ButtonItem, { layout: "inline", onClick: refreshStatus, children: "Scan" })] }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => {
                                 const modal = DFL.showModal(SP_JSX.jsx(PasswordModal, { mode: isOk ? 'uninstall' : 'install', onRefresh: refreshStatus, closeModal: () => modal.Close() }));
-                            }, children: isOk ? "Remove Udev Rules" : "Install Udev Rules" }) })] }), SP_JSX.jsxs(DFL.PanelSection, { title: "Controller Priority", children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: handleInternalToggle, disabled: !canToggleInternal || isToggling === "internal", children: SP_JSX.jsxs("div", { style: { display: "flex", alignItems: "center", justifyContent: "center", gap: "10px" }, children: [isBound ? SP_JSX.jsx(FaToggleOn, { color: "#66ff66" }) : SP_JSX.jsx(FaToggleOff, { color: "#ff4444" }), isToggling === "internal" ? "Processing..." : (isBound ? "Internal Pad: ACTIVE" : "Internal Pad: HIDDEN")] }) }) }), !canToggleInternal && isOk && (SP_JSX.jsx("div", { style: { fontSize: "0.75em", padding: "8px", color: "#ffcc00", textAlign: "center", backgroundColor: "rgba(0,0,0,0.2)", borderRadius: "4px" }, children: "Connect an external controller to allow disabling the internal one." }))] }), SP_JSX.jsx(DFL.PanelSection, { title: "External Devices", children: externalCtrls.length === 0 ? (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { opacity: 0.5, textAlign: "center", width: "100%", fontSize: "0.85em", padding: "10px" }, children: "No USB controllers detected" }) })) : (externalCtrls.map((ctrl) => (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsxs("div", { style: { display: "flex", flexDirection: "column", gap: "10px", width: "100%", padding: "5px 0" }, children: [SP_JSX.jsxs("div", { style: { display: "flex", alignItems: "center", gap: "12px" }, children: [SP_JSX.jsx("div", { style: {
+                            }, children: isOk ? "Remove Udev Rules" : "Install Udev Rules" }) })] }), SP_JSX.jsxs(DFL.PanelSection, { title: "Controller Priority", children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: handleInternalToggle, disabled: (!isBound ? false : !canToggleInternal) || isToggling === "internal", children: SP_JSX.jsxs("div", { style: { display: "flex", alignItems: "center", justifyContent: "center", gap: "10px" }, children: [isBound ? SP_JSX.jsx(FaToggleOn, { color: "#66ff66" }) : SP_JSX.jsx(FaToggleOff, { color: "#ff4444" }), isToggling === "internal" ? "Processing..." : (isBound ? "Internal Pad: ACTIVE" : "Internal Pad: HIDDEN")] }) }) }), !canToggleInternal && isBound && isOk && (SP_JSX.jsx("div", { style: { fontSize: "0.75em", padding: "8px", color: "#ffcc00", textAlign: "center", backgroundColor: "rgba(0,0,0,0.2)", borderRadius: "4px" }, children: "Connect an external controller to allow disabling the internal one." }))] }), SP_JSX.jsx(DFL.PanelSection, { title: "External Devices", children: externalCtrls.length === 0 ? (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { opacity: 0.5, textAlign: "center", width: "100%", fontSize: "0.85em", padding: "10px" }, children: "No USB controllers detected" }) })) : (externalCtrls.map((ctrl) => (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsxs("div", { style: { display: "flex", flexDirection: "column", gap: "10px", width: "100%", padding: "5px 0" }, children: [SP_JSX.jsxs("div", { style: { display: "flex", alignItems: "center", gap: "12px" }, children: [SP_JSX.jsx("div", { style: {
                                             minWidth: "35px",
                                             height: "35px",
                                             display: "flex",
@@ -194,7 +193,7 @@ const Content = () => {
                                             justifyContent: "center",
                                             backgroundColor: "rgba(255, 255, 255, 0.05)",
                                             borderRadius: "6px"
-                                        }, children: SP_JSX.jsx(FaGamepad, { color: ctrl.is_bound ? "#3b82f6" : "#555", size: 20 }) }), SP_JSX.jsxs("div", { style: { display: "flex", flexDirection: "column", overflow: "hidden" }, children: [SP_JSX.jsx("span", { style: { fontSize: "0.95em", fontWeight: "bold", wordBreak: "break-word" }, children: ctrl.name }), SP_JSX.jsxs("span", { style: { fontSize: "0.7em", opacity: 0.5 }, children: ["Port: ", ctrl.id, " \u2022 ", ctrl.is_bound ? "Connected" : "Disabled (Unbound)"] })] })] }), SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => handleExternalToggle(ctrl.id, ctrl.is_bound), disabled: isToggling !== null, children: SP_JSX.jsx("div", { style: { display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }, children: isToggling === ctrl.id ? ("Updating...") : (SP_JSX.jsxs(SP_JSX.Fragment, { children: [ctrl.is_bound ? SP_JSX.jsx(FaUnlink, {}) : SP_JSX.jsx(FaLink, {}), ctrl.is_bound ? "Unbind Controller" : "Bind Controller"] })) }) })] }) }, ctrl.id)))) })] }));
+                                        }, children: SP_JSX.jsx(FaGamepad, { color: ctrl.is_bound ? "#3b82f6" : "#555", size: 20 }) }), SP_JSX.jsxs("div", { style: { display: "flex", flexDirection: "column", overflow: "hidden" }, children: [SP_JSX.jsx("span", { style: { fontSize: "0.95em", fontWeight: "bold", wordBreak: "break-word" }, children: ctrl.name }), SP_JSX.jsxs("span", { style: { fontSize: "0.7em", opacity: 0.5 }, children: ["Port: ", ctrl.id, " \u2022 ", ctrl.is_bound ? "Connected" : "Disabled (Unbound)"] })] })] }), SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => handleExternalToggle(ctrl.id, ctrl.is_bound), disabled: isToggling !== null || !canUnbindExternal(ctrl.is_bound), children: SP_JSX.jsx("div", { style: { display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }, children: isToggling === ctrl.id ? ("Updating...") : (SP_JSX.jsxs(SP_JSX.Fragment, { children: [ctrl.is_bound ? SP_JSX.jsx(FaUnlink, {}) : SP_JSX.jsx(FaLink, {}), ctrl.is_bound ? "Unbind Controller" : "Bind Controller"] })) }) }), !canUnbindExternal(ctrl.is_bound) && (SP_JSX.jsx("div", { style: { fontSize: "0.7em", color: "#ffcc00", textAlign: "center" }, children: "Cannot unbind: this is your last active controller." }))] }) }, ctrl.id)))) })] }));
 };
 var index = definePlugin(() => ({
     name: "ControllerPriority",
