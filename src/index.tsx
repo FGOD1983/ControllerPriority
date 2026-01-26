@@ -24,17 +24,43 @@ const PasswordModal: FC<{ closeModal: () => void; onRefresh: () => void; mode: '
   const handleSubmit = async () => {
     if (!password) return;
     closeModal();
-    const result = await (mode === 'install' ? restoreUdevWithPassword(password) : uninstallUdevRule(password));
-    toaster.toast({ title: result.success ? "Success" : "Error", body: result.message });
-    onRefresh();
+    const action = mode === 'install' ? restoreUdevWithPassword : uninstallUdevRule;
+    try {
+      const result = await action(password);
+      toaster.toast({ title: result.success ? "Success" : "Error", body: result.message });
+      onRefresh();
+    } catch (e) {
+      toaster.toast({ title: "Error", body: "Communication failed" });
+    }
+  };
+
+  // FIX: Vangt R2/Enter op zodat de modal direct verwerkt wordt
+  const handleKeyDown = (e: any) => {
+    if (e.key === 'Enter' && password) {
+      handleSubmit();
+    }
   };
 
   return (
-    <ModalRoot onCancel={closeModal} onAccept={handleSubmit} acceptText={mode === 'install' ? "Install" : "Remove"}>
+    <ModalRoot 
+      onCancel={closeModal} 
+      onAccept={handleSubmit} 
+      acceptText={mode === 'install' ? "Install" : "Remove"}
+      bAllowFullSize={false}
+    >
       <h1 style={{ marginBottom: "10px" }}>Sudo Password Required</h1>
-      <TextField label="Password" value={password} bIsPassword={true} onChange={(e: any) => setPassword(e.target.value)} focusOnMount={true} />
+      <TextField 
+        label="Password" 
+        value={password} 
+        bIsPassword={true} 
+        onChange={(e: any) => setPassword(e.target.value)} 
+        onKeyDown={handleKeyDown} 
+        focusOnMount={true} 
+      />
       <div style={{ marginTop: "20px" }}>
-        <ButtonItem layout="below" onClick={handleSubmit} disabled={!password}>Confirm Password</ButtonItem>
+        <ButtonItem layout="below" onClick={handleSubmit} disabled={!password}>
+          Confirm Password
+        </ButtonItem>
       </div>
     </ModalRoot>
   );
@@ -82,14 +108,12 @@ const Content: FC = () => {
 
   const handleExternalToggle = async (id: string, currentlyBound: boolean) => {
     setIsToggling(id);
-    // disable = true als hij momenteel bound is
     const success = await toggleController(currentlyBound, id);
     if (success) {
       toaster.toast({ 
         title: "USB Port " + id, 
-        body: currentlyBound ? "Unbinding device..." : "Binding device..." 
+        body: currentlyBound ? "Unbinding..." : "Binding..." 
       });
-      // Wacht even op USB re-enumeration
       setTimeout(async () => {
         await refreshStatus();
         setIsToggling(null);
@@ -109,7 +133,7 @@ const Content: FC = () => {
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
               {isOk ? <FaCheckCircle color="#66ff66" /> : <FaExclamationTriangle color="#ffcc00" />}
-              <span style={{ fontSize: "0.9em" }}>{isOk ? "Udev Safety Active" : "Setup Required"}</span>
+              <span style={{ fontSize: "0.9em" }}>{isOk ? "Safety Active" : "Setup Required"}</span>
             </div>
             <ButtonItem layout="inline" onClick={refreshStatus}>Scan</ButtonItem>
           </div>
@@ -143,11 +167,11 @@ const Content: FC = () => {
         )}
       </PanelSection>
 
-      <PanelSection title="Detected External Devices">
+      <PanelSection title="External Devices">
         {externalCtrls.length === 0 ? (
           <PanelSectionRow>
             <div style={{ opacity: 0.5, textAlign: "center", width: "100%", fontSize: "0.85em", padding: "10px" }}>
-              No external USB controllers found
+              No USB controllers detected
             </div>
           </PanelSectionRow>
         ) : (
@@ -155,7 +179,6 @@ const Content: FC = () => {
             <PanelSectionRow key={ctrl.id}>
               <div style={{ display: "flex", flexDirection: "column", gap: "10px", width: "100%", padding: "5px 0" }}>
                 
-                {/* Naam van de controller boven de knop */}
                 <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                   <div style={{ 
                     minWidth: "35px", 
@@ -173,12 +196,11 @@ const Content: FC = () => {
                       {ctrl.name}
                     </span>
                     <span style={{ fontSize: "0.7em", opacity: 0.5 }}>
-                      Port: {ctrl.id} • {ctrl.is_bound ? "Status: Bound" : "Status: Unbound"}
+                      Port: {ctrl.id} • {ctrl.is_bound ? "Connected" : "Disabled (Unbound)"}
                     </span>
                   </div>
                 </div>
 
-                {/* De actieknop eronder */}
                 <ButtonItem 
                   layout="below" 
                   onClick={() => handleExternalToggle(ctrl.id, ctrl.is_bound)}
@@ -204,13 +226,8 @@ const Content: FC = () => {
   );
 }
 
-export default definePlugin(() => {
-  return {
-    name: "ControllerPriority",
-    content: <Content />,
-    icon: <FaGamepad />,
-    onUnload() {
-      console.log("ControllerPriority unloaded");
-    }
-  };
-});
+export default definePlugin(() => ({
+  name: "ControllerPriority",
+  content: <Content />,
+  icon: <FaGamepad />,
+}));
