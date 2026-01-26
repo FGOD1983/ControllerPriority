@@ -9,130 +9,110 @@ import {
 } from "@decky/ui";
 import { definePlugin, callable, toaster } from "@decky/api";
 import { useState, FC, useEffect } from "react";
-import { FaGamepad, FaCheckCircle, FaExclamationTriangle } from "react-icons/fa";
+import { FaGamepad, FaCheckCircle, FaExclamationTriangle, FaToggleOn, FaToggleOff } from "react-icons/fa";
 
 const restoreUdevWithPassword = callable<[string], any>("restore_udev_with_password");
+const uninstallUdevRule = callable<[string], any>("uninstall_udev_rule");
 const checkStatus = callable<[], boolean>("check_status");
+const checkBindStatus = callable<[], boolean>("check_bind_status");
+const toggleController = callable<[boolean], boolean>("toggle_controller");
 
-const PasswordModal: FC<{ closeModal: () => void; onRefresh: () => void }> = ({ closeModal, onRefresh }) => {
+const PasswordModal: FC<{ closeModal: () => void; onRefresh: () => void; mode: 'install' | 'uninstall' }> = ({ closeModal, onRefresh, mode }) => {
   const [password, setPassword] = useState("");
 
   const handleSubmit = async () => {
     if (!password) return;
     closeModal();
-    toaster.toast({ title: "Working...", body: "Restoring udev rules" });
+    const action = mode === 'install' ? restoreUdevWithPassword : uninstallUdevRule;
     try {
-      const result = await restoreUdevWithPassword(password);
-      toaster.toast({
-        title: result.success ? "Success" : "Error",
-        body: result.message,
-      });
-      onRefresh(); // Ververs de status in het hoofdmenu
+      const result = await action(password);
+      toaster.toast({ title: result.success ? "Success" : "Error", body: result.message });
+      onRefresh();
     } catch (e) {
-      toaster.toast({ title: "Error", body: "Backend communication failed" });
+      toaster.toast({ title: "Error", body: "Communication failed" });
     }
   };
 
   return (
-    <ModalRoot onCancel={closeModal} onAccept={handleSubmit} acceptText="Restore">
-      <h1 style={{ marginBottom: "10px" }}>Enter Sudo Password</h1>
+    <ModalRoot onCancel={closeModal} onAccept={handleSubmit} acceptText={mode === 'install' ? "Install" : "Remove"}>
+      <h1 style={{ marginBottom: "10px" }}>Sudo Password Required</h1>
       <TextField
         label="Password"
         value={password}
         bIsPassword={true}
         onChange={(e: any) => setPassword(e.target.value)}
         focusOnMount={true}
-        onKeyDown={(e: React.KeyboardEvent) => e.key === 'Enter' && handleSubmit()}
       />
+      <div style={{ marginTop: "20px" }}>
+        <ButtonItem layout="below" onClick={handleSubmit} disabled={!password}>
+          Confirm Password
+        </ButtonItem>
+      </div>
     </ModalRoot>
   );
 };
 
 const Content: FC = () => {
   const [isOk, setIsOk] = useState<boolean | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [isBound, setIsBound] = useState<boolean>(true);
 
   const refreshStatus = async () => {
-    setLoading(true);
     try {
-      const status = await checkStatus();
-      setIsOk(status);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
+      const udevStatus = await checkStatus();
+      const bindStatus = await checkBindStatus();
+      setIsOk(udevStatus);
+      setIsBound(bindStatus);
+    } catch (e) { console.error(e); }
+  };
+
+  useEffect(() => { refreshStatus(); }, []);
+
+  const handleLiveToggle = async () => {
+    const success = await toggleController(isBound); 
+    if (success) {
+      setIsBound(!isBound);
+      toaster.toast({ title: "Controller", body: isBound ? "Disabled" : "Enabled" });
     }
   };
 
-  // Check de status zodra de plugin wordt geopend
-  useEffect(() => {
-    refreshStatus();
-  }, []);
-
   return (
-    <PanelSection title="System Status">
-      <PanelSectionRow>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            {isOk === null ? (
-              <span>Checking...</span>
-            ) : isOk ? (
-              <>
-                <FaCheckCircle color="#66ff66" />
-                <span style={{ color: "#66ff66" }}>Status: Active</span>
-              </>
-            ) : (
-              <>
-                <FaExclamationTriangle color="#ffcc00" />
-                <span style={{ color: "#ffcc00" }}>Status: Missing</span>
-              </>
-            )}
-          </div>
-          <ButtonItem layout="inline" onClick={refreshStatus} disabled={loading}>
-            {loading ? "..." : "Check"}
-          </ButtonItem>
-        </div>
-      </PanelSectionRow>
-
-      <PanelSectionRow>
-        <ButtonItem 
-          layout="below" 
-          disabled={isOk === true} // Optioneel: disable knop als alles al goed staat
-          onClick={() => {
-            const modal = showModal(<PasswordModal onRefresh={refreshStatus} closeModal={() => modal.Close()} />);
-          }}
-        >
-          {isOk ? "Udev Rules Installed" : "Install/Restore Udev Rules"}
-        </ButtonItem>
-      </PanelSectionRow>
-
-      {!isOk && isOk !== null && (
+    <>
+      <PanelSection title="System Status">
         <PanelSectionRow>
-          <div style={{ fontSize: "0.8em", color: "#ccc", fontStyle: "italic" }}>
-            The udev rules are required to give external controllers priority.
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              {isOk ? <><FaCheckCircle color="#66ff66" /> <span>Rules Active</span></> : 
+                      <><FaExclamationTriangle color="#ffcc00" /> <span>Rules Missing</span></>}
+            </div>
+            <ButtonItem layout="inline" onClick={refreshStatus}>Check</ButtonItem>
           </div>
         </PanelSectionRow>
-      )}
-    </PanelSection>
+        <PanelSectionRow>
+          <ButtonItem layout="below" onClick={() => {
+              const modal = showModal(<PasswordModal mode={isOk ? 'uninstall' : 'install'} onRefresh={refreshStatus} closeModal={() => modal.Close()} />);
+            }}>
+            {isOk ? "Uninstall Udev Rules" : "Install Udev Rules"}
+          </ButtonItem>
+        </PanelSectionRow>
+      </PanelSection>
+
+      <PanelSection title="Live Control">
+        <PanelSectionRow>
+          <ButtonItem layout="below" onClick={handleLiveToggle}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "10px" }}>
+              {isBound ? <FaToggleOn color="#66ff66" /> : <FaToggleOff color="#ff4444" />}
+              {isBound ? "Internal Controller: ON" : "Internal Controller: OFF"}
+            </div>
+          </ButtonItem>
+        </PanelSectionRow>
+      </PanelSection>
+    </>
   );
 }
 
-export default definePlugin(() => {
-  // De opstart-toast laten we staan als extra waarschuwing
-  checkStatus().then((ok) => {
-    if (!ok) {
-      toaster.toast({
-        title: "Controller Priority",
-        body: "Udev rules missing!",
-        duration: 5000,
-      });
-    }
-  });
-
-  return {
-    name: "ControllerPriority",
-    titleView: <div className={staticClasses.Title}>Controller Priority</div>,
-    content: <Content />,
-    icon: <FaGamepad />,
-  };
-});
+export default definePlugin(() => ({
+  name: "ControllerPriority",
+  titleView: <div className={staticClasses.Title}>Controller Priority</div>,
+  content: <Content />,
+  icon: <FaGamepad />,
+}));
