@@ -34,7 +34,6 @@ const PasswordModal: FC<{ closeModal: () => void; onRefresh: () => void; mode: '
     }
   };
 
-  // FIX: Vangt R2/Enter op zodat de modal direct verwerkt wordt
   const handleKeyDown = (e: any) => {
     if (e.key === 'Enter' && password) {
       handleSubmit();
@@ -95,13 +94,7 @@ const Content: FC = () => {
 
   const handleInternalToggle = async () => {
     setIsToggling("internal");
-    const success = await toggleController(isBound, "internal"); 
-    if (success) {
-      toaster.toast({ 
-        title: "Internal Controller", 
-        body: isBound ? "Hidden" : "Restored" 
-      });
-    }
+    await toggleController(isBound, "internal"); 
     await refreshStatus();
     setIsToggling(null);
   };
@@ -110,10 +103,6 @@ const Content: FC = () => {
     setIsToggling(id);
     const success = await toggleController(currentlyBound, id);
     if (success) {
-      toaster.toast({ 
-        title: "USB Port " + id, 
-        body: currentlyBound ? "Unbinding..." : "Binding..." 
-      });
       setTimeout(async () => {
         await refreshStatus();
         setIsToggling(null);
@@ -123,8 +112,17 @@ const Content: FC = () => {
     }
   };
 
-  const hasActiveExternal = externalCtrls.some(c => c.is_bound);
-  const canToggleInternal = isOk === true && (hasActiveExternal || !isBound);
+  // Logica voor veiligheid
+  const activeExternalCount = externalCtrls.filter(c => c.is_bound).length;
+  const canToggleInternal = isOk === true && activeExternalCount > 0;
+  
+  // Mag je een externe controller unbinden? 
+  // Alleen als: de interne pad aan staat OF er nog een andere externe pad overblijft.
+  const canUnbindExternal = (ctrlIsBound: boolean) => {
+    if (!ctrlIsBound) return true; // Opnieuw binden mag altijd
+    if (isBound) return true; // Interne pad is aan, dus unbinden is veilig
+    return activeExternalCount > 1; // Interne pad is uit, dus alleen unbinden als er meer dan 1 is
+  };
 
   return (
     <>
@@ -152,7 +150,7 @@ const Content: FC = () => {
           <ButtonItem 
             layout="below" 
             onClick={handleInternalToggle}
-            disabled={!canToggleInternal || isToggling === "internal"}
+            disabled={(!isBound ? false : !canToggleInternal) || isToggling === "internal"}
           >
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "10px" }}>
               {isBound ? <FaToggleOn color="#66ff66" /> : <FaToggleOff color="#ff4444" />}
@@ -160,7 +158,7 @@ const Content: FC = () => {
             </div>
           </ButtonItem>
         </PanelSectionRow>
-        {!canToggleInternal && isOk && (
+        {!canToggleInternal && isBound && isOk && (
           <div style={{ fontSize: "0.75em", padding: "8px", color: "#ffcc00", textAlign: "center", backgroundColor: "rgba(0,0,0,0.2)", borderRadius: "4px" }}>
              Connect an external controller to allow disabling the internal one.
           </div>
@@ -204,7 +202,7 @@ const Content: FC = () => {
                 <ButtonItem 
                   layout="below" 
                   onClick={() => handleExternalToggle(ctrl.id, ctrl.is_bound)}
-                  disabled={isToggling !== null}
+                  disabled={isToggling !== null || !canUnbindExternal(ctrl.is_bound)}
                 >
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}>
                     {isToggling === ctrl.id ? (
@@ -217,6 +215,11 @@ const Content: FC = () => {
                     )}
                   </div>
                 </ButtonItem>
+                {!canUnbindExternal(ctrl.is_bound) && (
+                   <div style={{ fontSize: "0.7em", color: "#ffcc00", textAlign: "center" }}>
+                     Cannot unbind: this is your last active controller.
+                   </div>
+                )}
               </div>
             </PanelSectionRow>
           ))
