@@ -42,10 +42,11 @@ const PasswordModal: FC<{ closeModal: () => void; onRefresh: () => void; mode: '
         bIsPassword={true}
         onChange={(e: any) => setPassword(e.target.value)}
         focusOnMount={true}
+        onKeyDown={(e: any) => { if (e.key === 'Enter') handleSubmit(); }}
       />
       <div style={{ marginTop: "20px" }}>
         <ButtonItem layout="below" onClick={handleSubmit} disabled={!password}>
-          Confirm Password
+          Confirm Password (or press Enter)
         </ButtonItem>
       </div>
     </ModalRoot>
@@ -62,16 +63,23 @@ const Content: FC = () => {
       const bindStatus = await checkBindStatus();
       setIsOk(udevStatus);
       setIsBound(bindStatus);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error("Status check failed", e);
+    }
   };
 
-  useEffect(() => { refreshStatus(); }, []);
+  // Live polling: Check status elke 2 seconden zolang het menu open is
+  useEffect(() => {
+    refreshStatus();
+    const interval = setInterval(refreshStatus, 2000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleLiveToggle = async () => {
     const success = await toggleController(isBound); 
     if (success) {
       setIsBound(!isBound);
-      toaster.toast({ title: "Controller", body: isBound ? "Disabled" : "Enabled" });
+      toaster.toast({ title: "Controller", body: isBound ? "Deactivated" : "Activated" });
     }
   };
 
@@ -84,7 +92,7 @@ const Content: FC = () => {
               {isOk ? <><FaCheckCircle color="#66ff66" /> <span>Rules Active</span></> : 
                       <><FaExclamationTriangle color="#ffcc00" /> <span>Rules Missing</span></>}
             </div>
-            <ButtonItem layout="inline" onClick={refreshStatus}>Check</ButtonItem>
+            <ButtonItem layout="inline" onClick={refreshStatus}>Refresh</ButtonItem>
           </div>
         </PanelSectionRow>
         <PanelSectionRow>

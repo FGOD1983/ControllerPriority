@@ -114,7 +114,8 @@ const PasswordModal = ({ closeModal, onRefresh, mode }) => {
             toaster.toast({ title: "Error", body: "Communication failed" });
         }
     };
-    return (SP_JSX.jsxs(DFL.ModalRoot, { onCancel: closeModal, onAccept: handleSubmit, acceptText: mode === 'install' ? "Install" : "Remove", children: [SP_JSX.jsx("h1", { style: { marginBottom: "10px" }, children: "Sudo Password Required" }), SP_JSX.jsx(DFL.TextField, { label: "Password", value: password, bIsPassword: true, onChange: (e) => setPassword(e.target.value), focusOnMount: true }), SP_JSX.jsx("div", { style: { marginTop: "20px" }, children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: handleSubmit, disabled: !password, children: "Confirm Password" }) })] }));
+    return (SP_JSX.jsxs(DFL.ModalRoot, { onCancel: closeModal, onAccept: handleSubmit, acceptText: mode === 'install' ? "Install" : "Remove", children: [SP_JSX.jsx("h1", { style: { marginBottom: "10px" }, children: "Sudo Password Required" }), SP_JSX.jsx(DFL.TextField, { label: "Password", value: password, bIsPassword: true, onChange: (e) => setPassword(e.target.value), focusOnMount: true, onKeyDown: (e) => { if (e.key === 'Enter')
+                    handleSubmit(); } }), SP_JSX.jsx("div", { style: { marginTop: "20px" }, children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: handleSubmit, disabled: !password, children: "Confirm Password (or press Enter)" }) })] }));
 };
 const Content = () => {
     const [isOk, setIsOk] = SP_REACT.useState(null);
@@ -127,19 +128,24 @@ const Content = () => {
             setIsBound(bindStatus);
         }
         catch (e) {
-            console.error(e);
+            console.error("Status check failed", e);
         }
     };
-    SP_REACT.useEffect(() => { refreshStatus(); }, []);
+    // Live polling: Check status elke 2 seconden zolang het menu open is
+    SP_REACT.useEffect(() => {
+        refreshStatus();
+        const interval = setInterval(refreshStatus, 2000);
+        return () => clearInterval(interval);
+    }, []);
     const handleLiveToggle = async () => {
         const success = await toggleController(isBound);
         if (success) {
             setIsBound(!isBound);
-            toaster.toast({ title: "Controller", body: isBound ? "Disabled" : "Enabled" });
+            toaster.toast({ title: "Controller", body: isBound ? "Deactivated" : "Activated" });
         }
     };
     return (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsxs(DFL.PanelSection, { title: "System Status", children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsxs("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between" }, children: [SP_JSX.jsx("div", { style: { display: "flex", alignItems: "center", gap: "10px" }, children: isOk ? SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(FaCheckCircle, { color: "#66ff66" }), " ", SP_JSX.jsx("span", { children: "Rules Active" })] }) :
-                                        SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(FaExclamationTriangle, { color: "#ffcc00" }), " ", SP_JSX.jsx("span", { children: "Rules Missing" })] }) }), SP_JSX.jsx(DFL.ButtonItem, { layout: "inline", onClick: refreshStatus, children: "Check" })] }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => {
+                                        SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(FaExclamationTriangle, { color: "#ffcc00" }), " ", SP_JSX.jsx("span", { children: "Rules Missing" })] }) }), SP_JSX.jsx(DFL.ButtonItem, { layout: "inline", onClick: refreshStatus, children: "Refresh" })] }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => {
                                 const modal = DFL.showModal(SP_JSX.jsx(PasswordModal, { mode: isOk ? 'uninstall' : 'install', onRefresh: refreshStatus, closeModal: () => modal.Close() }));
                             }, children: isOk ? "Uninstall Udev Rules" : "Install Udev Rules" }) })] }), SP_JSX.jsx(DFL.PanelSection, { title: "Live Control", children: SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: handleLiveToggle, children: SP_JSX.jsxs("div", { style: { display: "flex", alignItems: "center", justifyContent: "center", gap: "10px" }, children: [isBound ? SP_JSX.jsx(FaToggleOn, { color: "#66ff66" }) : SP_JSX.jsx(FaToggleOff, { color: "#ff4444" }), isBound ? "Internal Controller: ON" : "Internal Controller: OFF"] }) }) }) })] }));
 };
