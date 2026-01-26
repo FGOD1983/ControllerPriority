@@ -68,7 +68,6 @@ const Content: FC = () => {
     }
   };
 
-  // Live polling: Check status elke 2 seconden zolang het menu open is
   useEffect(() => {
     refreshStatus();
     const interval = setInterval(refreshStatus, 2000);
@@ -106,13 +105,22 @@ const Content: FC = () => {
 
       <PanelSection title="Live Control">
         <PanelSectionRow>
-          <ButtonItem layout="below" onClick={handleLiveToggle}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "10px" }}>
+          <ButtonItem 
+            layout="below" 
+            onClick={handleLiveToggle}
+            disabled={isOk !== true} // Beveiliging tegen lock-out
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", opacity: isOk ? 1 : 0.5 }}>
               {isBound ? <FaToggleOn color="#66ff66" /> : <FaToggleOff color="#ff4444" />}
               {isBound ? "Internal Controller: ON" : "Internal Controller: OFF"}
             </div>
           </ButtonItem>
         </PanelSectionRow>
+        {isOk !== true && (
+          <div style={{ fontSize: "0.8em", padding: "10px", color: "#ffcc00", fontStyle: "italic" }}>
+            Install udev rules first to enable live toggle safely.
+          </div>
+        )}
       </PanelSection>
     </>
   );

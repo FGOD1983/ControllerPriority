@@ -131,7 +131,6 @@ const Content = () => {
             console.error("Status check failed", e);
         }
     };
-    // Live polling: Check status elke 2 seconden zolang het menu open is
     SP_REACT.useEffect(() => {
         refreshStatus();
         const interval = setInterval(refreshStatus, 2000);
@@ -147,7 +146,7 @@ const Content = () => {
     return (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsxs(DFL.PanelSection, { title: "System Status", children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsxs("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between" }, children: [SP_JSX.jsx("div", { style: { display: "flex", alignItems: "center", gap: "10px" }, children: isOk ? SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(FaCheckCircle, { color: "#66ff66" }), " ", SP_JSX.jsx("span", { children: "Rules Active" })] }) :
                                         SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(FaExclamationTriangle, { color: "#ffcc00" }), " ", SP_JSX.jsx("span", { children: "Rules Missing" })] }) }), SP_JSX.jsx(DFL.ButtonItem, { layout: "inline", onClick: refreshStatus, children: "Refresh" })] }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => {
                                 const modal = DFL.showModal(SP_JSX.jsx(PasswordModal, { mode: isOk ? 'uninstall' : 'install', onRefresh: refreshStatus, closeModal: () => modal.Close() }));
-                            }, children: isOk ? "Uninstall Udev Rules" : "Install Udev Rules" }) })] }), SP_JSX.jsx(DFL.PanelSection, { title: "Live Control", children: SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: handleLiveToggle, children: SP_JSX.jsxs("div", { style: { display: "flex", alignItems: "center", justifyContent: "center", gap: "10px" }, children: [isBound ? SP_JSX.jsx(FaToggleOn, { color: "#66ff66" }) : SP_JSX.jsx(FaToggleOff, { color: "#ff4444" }), isBound ? "Internal Controller: ON" : "Internal Controller: OFF"] }) }) }) })] }));
+                            }, children: isOk ? "Uninstall Udev Rules" : "Install Udev Rules" }) })] }), SP_JSX.jsxs(DFL.PanelSection, { title: "Live Control", children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: handleLiveToggle, disabled: isOk !== true, children: SP_JSX.jsxs("div", { style: { display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", opacity: isOk ? 1 : 0.5 }, children: [isBound ? SP_JSX.jsx(FaToggleOn, { color: "#66ff66" }) : SP_JSX.jsx(FaToggleOff, { color: "#ff4444" }), isBound ? "Internal Controller: ON" : "Internal Controller: OFF"] }) }) }), isOk !== true && (SP_JSX.jsx("div", { style: { fontSize: "0.8em", padding: "10px", color: "#ffcc00", fontStyle: "italic" }, children: "Install udev rules first to enable live toggle safely." }))] })] }));
 };
 var index = definePlugin(() => ({
     name: "ControllerPriority",
