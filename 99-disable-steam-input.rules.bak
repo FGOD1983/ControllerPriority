@@ -1,3 +1,0 @@
-KERNEL=="input*", SUBSYSTEM=="input", ENV{ID_INPUT_JOYSTICK}=="1", ACTION=="add", RUN+="{SCRIPT} disable %k %E{NAME} %E{UNIQ} %E{PRODUCT}"
-KERNEL=="input*", SUBSYSTEM=="input", ENV{ID_INPUT_JOYSTICK}=="1", ACTION=="remove", RUN+="{SCRIPT} enable %k %E{NAME} %E{UNIQ} %E{PRODUCT}"
-
