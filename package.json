@@ -1,37 +1,32 @@
 {
-  "name": "decky-plugin-template",
-  "version": "0.0.1",
-  "description": "A template to quickly create decky plugins from scratch, based on TypeScript and webpack",
+  "name": "controller-priority",
+  "version": "0.0.2",
+  "description": "Give priority to external controllers by disabling the internal Steam Deck controls.",
   "type": "module",
+  "author": "FGOD1983",
+  "license": "GPL-3.0-or-later",
   "scripts": {
     "build": "rollup -c",
-    "watch": "rollup -c -w",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "watch": "rollup -c -w"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/SteamDeckHomebrew/decky-plugin-template.git"
+    "url": "git+https://github.com/FGOD1983/ControllerPriority.git"
   },
   "keywords": [
     "decky",
-    "plugin",
-    "plugin-template",
     "steam-deck",
-    "deck"
+    "controller",
+    "udev"
   ],
-  "author": "You <you@you.tld>",
-  "license": "BSD-3-Clause",
   "bugs": {
-    "url": "https://github.com/SteamDeckHomebrew/decky-plugin-template/issues"
+    "url": "https://github.com/FGOD1983/ControllerPriority/issues"
   },
-  "homepage": "https://github.com/SteamDeckHomebrew/decky-plugin-template#readme",
+  "homepage": "https://github.com/FGOD1983/ControllerPriority/",
   "devDependencies": {
     "@decky/rollup": "^1.0.2",
     "@decky/ui": "^4.11.0",
-    "@rollup/rollup-linux-x64-musl": "^4.53.3",
     "@types/react": "19.1.1",
-    "@types/react-dom": "19.1.1",
-    "@types/webpack": "^5.28.5",
     "rollup": "^4.53.3",
     "typescript": "^5.6.2"
   },

@@ -102,7 +102,7 @@ const Content: FC = () => {
             const modal = showModal(<PasswordModal onRefresh={refreshStatus} closeModal={() => modal.Close()} />);
           }}
         >
-          {isOk ? "Reinstall Rules" : "Restore Udev Rules"}
+          {isOk ? "Udev Rules Installed" : "Install/Restore Udev Rules"}
         </ButtonItem>
       </PanelSectionRow>
 
