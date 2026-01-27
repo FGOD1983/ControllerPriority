@@ -1,100 +1,104 @@
 import os
-import datetime
+import re
 import glob
 import asyncio
 
+INPUT_DEVICES = "/proc/bus/input/devices"
+INTERNAL_USB_PATH = "/sys/bus/usb/devices/3-3:1.0/driver"
+
 class Plugin:
-    PLUGIN_DIR = os.path.dirname(os.path.realpath(__file__))
-    LOG_FILE = "/tmp/controller-priority.log"
-    # We houden de vorige staat bij in de klasse zelf
-    last_external_count = 0
+    # last_external_count op -1 zorgt dat de eerste scan de huidige situatie 'leert'
+    last_external_count = -1
+    is_processing = False
 
-    def log(self, msg: str):
+    # ---------- DETECTION LOGIC ----------
+    def _parse_input_devices(self):
         try:
-            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            with open(self.LOG_FILE, "a") as f:
-                f.write(f"{timestamp} - {msg}\n")
-        except: pass
+            with open(INPUT_DEVICES, "r") as f:
+                return f.read().split("\n\n")
+        except:
+            return []
 
-    def is_controller(self, dev_id):
-        dev_path = f"/sys/bus/usb/devices/{dev_id}"
-        product_file = os.path.join(dev_path, "product")
-        if not os.path.exists(product_file): return False
-        try:
-            with open(product_file, "r") as f:
-                product_name = f.read().strip().lower()
-            blacklist = ["hub", "lan", "radio", "storage", "ethernet", "bluetooth"]
-            if any(x in product_name for x in blacklist): return False
-            class_files = glob.glob(f"{dev_path}/{dev_id}:*/bInterfaceClass")
-            for cf in class_files:
-                with open(cf, "r") as f:
-                    if f.read().strip().lower() in ["03", "3", "ff"]: return True
-        except: pass
-        return False
+    def _is_external_controller(self, block: str) -> bool:
+        if "EV=20000b" not in block: return False
+        if "/devices/virtual/input/" in block: return False
+        if 'Name="Microsoft X-Box 360 pad' in block: return False
+        return True
 
-    async def check_bind_status(self):
-        return os.path.exists("/sys/bus/usb/devices/3-3:1.0/driver")
+    def _extract_controller_info(self, block: str):
+        name_match = re.search(r'N: Name="([^"]+)"', block)
+        bus_match = re.search(r'I: .*Bus=([0-9a-fA-F]+)', block)
+        phys_match = re.search(r'P: Phys=(.*)', block)
+        if not name_match or not bus_match: return None
+        
+        bus = bus_match.group(1)
+        return {
+            "id": phys_match.group(1).strip() if phys_match else name_match.group(1),
+            "name": name_match.group(1),
+            "type": "Bluetooth" if bus == "0005" else "USB",
+            "is_bound": True
+        }
 
     async def get_external_controllers(self):
         controllers = []
-        usb_bus_path = "/sys/bus/usb/devices/"
-        any_external_active = False 
-        
         try:
-            for dev_id in os.listdir(usb_bus_path):
-                if ":" in dev_id or dev_id.startswith("usb") or dev_id == "3-3": continue
+            # 1. Scan huidige controllers
+            for block in self._parse_input_devices():
+                if self._is_external_controller(block):
+                    info = self._extract_controller_info(block)
+                    if info: controllers.append(info)
+
+            current_count = len(controllers)
+
+            # 2. AUTO-SWITCH TRIGGER LOGICA
+            if self.last_external_count != -1:
+                # TRIGGER: Eerste externe controller aangesloten (0 -> 1+)
+                if self.last_external_count == 0 and current_count > 0:
+                    is_active = await self.check_bind_status()
+                    if is_active:
+                        asyncio.create_task(self.toggle_controller(True, "internal"))
                 
-                if self.is_controller(dev_id):
-                    dev_path = os.path.join(usb_bus_path, dev_id)
-                    with open(os.path.join(dev_path, "product"), "r") as f:
-                        name = f.read().strip()
-                    
-                    is_bound = len(glob.glob(f"{dev_path}/{dev_id}:*/driver")) > 0
-                    if is_bound:
-                        any_external_active = True
-                        
-                    controllers.append({"id": dev_id, "name": name, "is_bound": is_bound})
+                # TRIGGER: Laatste externe controller losgekoppeld (1+ -> 0)
+                elif self.last_external_count > 0 and current_count == 0:
+                    is_active = await self.check_bind_status()
+                    if not is_active:
+                        asyncio.create_task(self.toggle_controller(False, "internal"))
 
-            current_count = len([c for c in controllers if c['is_bound']])
-            internal_is_bound = await self.check_bind_status()
-
-            # --- FULL AUTO-SWITCH LOGIC ---
-            
-            # TRIGGER: 0 -> 1 (Eerste controller verbonden)
-            if self.last_external_count == 0 and current_count >= 1:
-                if internal_is_bound:
-                    self.log("AUTO-SWITCH: External detected. Disabling internal pad.")
-                    await self.toggle_controller(True, "internal")
-
-            # TRIGGER: x -> 0 (Laatste controller weg/Hub los)
-            elif self.last_external_count > 0 and current_count == 0:
-                if not internal_is_bound:
-                    self.log("AUTO-SWITCH: No externals left. Re-enabling internal pad.")
-                    await self.toggle_controller(False, "internal")
-
-            # Update de staat voor de volgende poll
+            # Update count voor vergelijking bij de volgende scan
             self.last_external_count = current_count
 
-        except Exception as e: 
-            self.log(f"Scan error: {str(e)}")
+        except Exception as e:
+            print(f"Detection Error: {e}")
             
         return controllers
 
-    async def toggle_controller(self, disable: bool, target_id: str = "internal"):
-        action = "unbind" if disable else "bind"
-        base_id = "3-3" if target_id == "internal" else target_id
-        target_ids = [os.path.basename(x) for x in glob.glob(f"/sys/bus/usb/devices/{base_id}:*")]
+    # ---------- USB COMMANDS ----------
+    async def toggle_controller(self, current_status: bool, target_id: str = "internal"):
+        if self.is_processing: return
+        self.is_processing = True
         
-        for dev_id in target_ids:
-            for driver in ["usbhid", "xpad", "hid-generic"]:
-                path = f"/sys/bus/usb/drivers/{driver}/{action}"
-                if os.path.exists(path):
-                    try:
-                        with open(path, "w") as f: 
-                            f.write(dev_id)
-                    except: pass
-        await asyncio.sleep(0.5)
+        # Als current_status (isBound) True is -> unbinden
+        action = "unbind" if current_status else "bind"
+        
+        try:
+            for dev_path in glob.glob("/sys/bus/usb/devices/3-3:*"):
+                dev_id = os.path.basename(dev_path)
+                for driver in ["usbhid", "hid-steam", "xpad", "hid-generic"]:
+                    path = f"/sys/bus/usb/drivers/{driver}/{action}"
+                    if os.path.exists(path):
+                        try:
+                            with open(path, "w") as f:
+                                f.write(dev_id)
+                        except:
+                            pass 
+            await asyncio.sleep(0.8)
+        finally:
+            self.is_processing = False
         return True
 
-    async def _main(self): pass
-    async def _unload(self): pass
+    async def check_bind_status(self):
+        return os.path.exists(INTERNAL_USB_PATH)
+
+    async def _main(self):
+        # Reset bij opstarten
+        await self.toggle_controller(False, "internal")
