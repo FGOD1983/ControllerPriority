@@ -1,7 +1,7 @@
 {
   "name": "ControllerPriority",
   "title": "Controller Priority",
-  "version": "1.1.5",
+  "version": "1.2.0",
   "author": "FGOD1983",
   "description": "Automatically restores udev rules to prioritize USB/Bluetooth controllers over the Steam Deck controller.",
   "api_version": 2,
