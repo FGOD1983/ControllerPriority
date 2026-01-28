@@ -1,7 +1,7 @@
 import { ButtonItem, PanelSection, PanelSectionRow } from "@decky/ui";
 import { definePlugin, callable } from "@decky/api";
 import { useState, FC, useEffect } from "react";
-import { FaGamepad, FaToggleOn, FaToggleOff, FaLink, FaUnlink, FaBluetooth } from "react-icons/fa";
+import { FaGamepad, FaToggleOn, FaToggleOff, FaLink, FaUnlink, FaBluetooth, FaLifeRing } from "react-icons/fa";
 
 const checkBindStatus = callable<[], boolean>("check_bind_status");
 const toggleController = callable<[boolean, string], boolean>("toggle_controller");
@@ -33,17 +33,15 @@ const Content: FC = () => {
     setIsToggling(true);
     try {
       await toggleController(currentStatus, id);
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // We wachten kort zodat de backend de tijd heeft voor de hardware handshake
+      await new Promise((resolve) => setTimeout(resolve, 800));
       await refreshStatus();
     } finally {
       setIsToggling(false);
     }
   };
 
-  // --- SAFEGUARD LOGICA ---
   const activeExternalCount = externalCtrls.filter(c => c.is_bound).length;
-  
-  // Interne knop disabled als er geen externe actieve controllers zijn
   const internalDisabled = isToggling || (isBound && activeExternalCount === 0);
 
   return (
@@ -63,31 +61,62 @@ const Content: FC = () => {
               opacity: internalDisabled ? 0.5 : 1 
             }}>
               {isBound ? <FaToggleOn color="#66ff66" /> : <FaToggleOff color="#ff4444" />}
-              {isToggling ? "Wait..." : (isBound ? "Internal: ACTIVE" : "Internal: HIDDEN")}
+              {isToggling ? "Processing..." : (isBound ? "Internal: ACTIVE" : "Internal: HIDDEN")}
             </div>
           </ButtonItem>
         </PanelSectionRow>
+
+        {/* Emergency Fix Knop - Alleen zichtbaar als alles verborgen is of als backup */}
+        {!isBound && activeExternalCount === 0 && (
+          <PanelSectionRow>
+            <ButtonItem
+              layout="below"
+              onClick={() => handleToggle(false, "internal")}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", color: "#facc15" }}>
+                <FaLifeRing /> Emergency Reset Controls
+              </div>
+            </ButtonItem>
+          </PanelSectionRow>
+        )}
       </PanelSection>
 
       <PanelSection title="External Devices">
         {externalCtrls.length === 0 ? (
           <PanelSectionRow>
             <div style={{ opacity: 0.5, textAlign: "center", width: "100%", padding: "10px" }}>
-              No external hardware found
+              No controllers remembered
             </div>
           </PanelSectionRow>
         ) : (
           externalCtrls.map((ctrl) => {
-            // SAFEGUARD: Disable disconnect als intern UIT staat en dit de laatste externe is
             const isLastController = !isBound && activeExternalCount <= 1;
             const externalDisabled = isToggling || (ctrl.is_bound && isLastController);
+            
+            // UI styling voor 'offline' apparaten
+            const isOffline = !ctrl.is_bound;
 
             return (
               <PanelSectionRow key={ctrl.id}>
-                <div style={{ display: "flex", flexDirection: "column", width: "100%", gap: "8px" }}>
+                <div style={{ 
+                  display: "flex", 
+                  flexDirection: "column", 
+                  width: "100%", 
+                  gap: "8px",
+                  padding: "4px 0",
+                  opacity: isOffline ? 0.6 : 1
+                }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                    {ctrl.type === "Bluetooth" ? <FaBluetooth color="#3b82f6" /> : <FaGamepad color="#3b82f6" />}
-                    <div style={{ fontWeight: "bold", flexGrow: 1 }}>{ctrl.name}</div>
+                    {ctrl.type === "Bluetooth" ? 
+                      <FaBluetooth color={isOffline ? "#555" : "#3b82f6"} /> : 
+                      <FaGamepad color={isOffline ? "#555" : "#3b82f6"} />
+                    }
+                    <div style={{ flexGrow: 1 }}>
+                      <div style={{ fontWeight: "bold" }}>{ctrl.name}</div>
+                      <div style={{ fontSize: "0.8em", opacity: 0.7 }}>
+                        {isOffline ? "Offline / Disconnected" : `Active ${ctrl.type}`}
+                      </div>
+                    </div>
                   </div>
                   
                   <ButtonItem
@@ -99,11 +128,10 @@ const Content: FC = () => {
                       display: "flex", 
                       alignItems: "center", 
                       justifyContent: "center", 
-                      gap: "10px",
-                      opacity: externalDisabled ? 0.5 : 1
+                      gap: "10px"
                     }}>
                       {ctrl.is_bound ? <FaUnlink color="#ff4444" /> : <FaLink color="#66ff66" />}
-                      {ctrl.is_bound ? "Disconnect" : "Connect"}
+                      {ctrl.is_bound ? "Disconnect" : "Reconnect"}
                     </div>
                   </ButtonItem>
                 </div>
