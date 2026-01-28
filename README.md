@@ -40,6 +40,12 @@ Hey if you like what I did with this, :beers: or a :pizza: would be nice :D
 > **Note**: This plugin no longer requires udev rules. If you used a previous udev-based solution, you can safely clean it up by running:  
 > `sudo rm /etc/udev/rules.d/99-disable-steam-input.rules`
 
+## Tips
+
+### Note on Bluetooth Disconnection
+* **Powering Off**: When you turn off your Bluetooth controller normally (holding the power button), the internal controller will be restored almost instantly (~2-3 seconds).
+* **Mode Switching**: If you switch your controller to another mode (e.g., from Bluetooth to 2.4GHz) without turning it off first, SteamOS may wait up to 20 seconds for the Bluetooth connection to time out before the internal controller is restored due to the fact that not every Bluetooth controller send a proper goodbey when switching modes instead of powering it off. Therefor it will wait for the system-level Bluetooth timeout instead of instantly closing it down and re-enable the internal controls. This is a system-level Bluetooth timeout and not a limitation of the plugin.
+
 ## Credits & Acknowledgments
 
 This plugin evolved from the udev-based concepts by **scawp**, but has been completely rewritten to use a native Python backend and a background service for a seamless, password-free experience.
