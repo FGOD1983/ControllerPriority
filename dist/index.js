@@ -84,6 +84,8 @@ function FaBluetooth (props) {
   return GenIcon({"attr":{"viewBox":"0 0 448 512"},"child":[{"tag":"path","attr":{"d":"M292.6 171.1L249.7 214l-.3-86 43.2 43.1m-43.2 219.8l43.1-43.1-42.9-42.9-.2 86zM416 259.4C416 465 344.1 512 230.9 512S32 465 32 259.4 115.4 0 228.6 0 416 53.9 416 259.4zm-158.5 0l79.4-88.6L211.8 36.5v176.9L138 139.6l-27 26.9 92.7 93-92.7 93 26.9 26.9 73.8-73.8 2.3 170 127.4-127.5-83.9-88.7z"},"child":[]}]})(props);
 }function FaGamepad (props) {
   return GenIcon({"attr":{"viewBox":"0 0 640 512"},"child":[{"tag":"path","attr":{"d":"M480.07 96H160a160 160 0 1 0 114.24 272h91.52A160 160 0 1 0 480.07 96zM248 268a12 12 0 0 1-12 12h-52v52a12 12 0 0 1-12 12h-24a12 12 0 0 1-12-12v-52H84a12 12 0 0 1-12-12v-24a12 12 0 0 1 12-12h52v-52a12 12 0 0 1 12-12h24a12 12 0 0 1 12 12v52h52a12 12 0 0 1 12 12zm216 76a40 40 0 1 1 40-40 40 40 0 0 1-40 40zm64-96a40 40 0 1 1 40-40 40 40 0 0 1-40 40z"},"child":[]}]})(props);
+}function FaLifeRing (props) {
+  return GenIcon({"attr":{"viewBox":"0 0 512 512"},"child":[{"tag":"path","attr":{"d":"M256 8C119.033 8 8 119.033 8 256s111.033 248 248 248 248-111.033 248-248S392.967 8 256 8zm173.696 119.559l-63.399 63.399c-10.987-18.559-26.67-34.252-45.255-45.255l63.399-63.399a218.396 218.396 0 0 1 45.255 45.255zM256 352c-53.019 0-96-42.981-96-96s42.981-96 96-96 96 42.981 96 96-42.981 96-96 96zM127.559 82.304l63.399 63.399c-18.559 10.987-34.252 26.67-45.255 45.255l-63.399-63.399a218.372 218.372 0 0 1 45.255-45.255zM82.304 384.441l63.399-63.399c10.987 18.559 26.67 34.252 45.255 45.255l-63.399 63.399a218.396 218.396 0 0 1-45.255-45.255zm302.137 45.255l-63.399-63.399c18.559-10.987 34.252-26.67 45.255-45.255l63.399 63.399a218.403 218.403 0 0 1-45.255 45.255z"},"child":[]}]})(props);
 }function FaLink (props) {
   return GenIcon({"attr":{"viewBox":"0 0 512 512"},"child":[{"tag":"path","attr":{"d":"M326.612 185.391c59.747 59.809 58.927 155.698.36 214.59-.11.12-.24.25-.36.37l-67.2 67.2c-59.27 59.27-155.699 59.262-214.96 0-59.27-59.26-59.27-155.7 0-214.96l37.106-37.106c9.84-9.84 26.786-3.3 27.294 10.606.648 17.722 3.826 35.527 9.69 52.721 1.986 5.822.567 12.262-3.783 16.612l-13.087 13.087c-28.026 28.026-28.905 73.66-1.155 101.96 28.024 28.579 74.086 28.749 102.325.51l67.2-67.19c28.191-28.191 28.073-73.757 0-101.83-3.701-3.694-7.429-6.564-10.341-8.569a16.037 16.037 0 0 1-6.947-12.606c-.396-10.567 3.348-21.456 11.698-29.806l21.054-21.055c5.521-5.521 14.182-6.199 20.584-1.731a152.482 152.482 0 0 1 20.522 17.197zM467.547 44.449c-59.261-59.262-155.69-59.27-214.96 0l-67.2 67.2c-.12.12-.25.25-.36.37-58.566 58.892-59.387 154.781.36 214.59a152.454 152.454 0 0 0 20.521 17.196c6.402 4.468 15.064 3.789 20.584-1.731l21.054-21.055c8.35-8.35 12.094-19.239 11.698-29.806a16.037 16.037 0 0 0-6.947-12.606c-2.912-2.005-6.64-4.875-10.341-8.569-28.073-28.073-28.191-73.639 0-101.83l67.2-67.19c28.239-28.239 74.3-28.069 102.325.51 27.75 28.3 26.872 73.934-1.155 101.96l-13.087 13.087c-4.35 4.35-5.769 10.79-3.783 16.612 5.864 17.194 9.042 34.999 9.69 52.721.509 13.906 17.454 20.446 27.294 10.606l37.106-37.106c59.271-59.259 59.271-155.699.001-214.959z"},"child":[]}]})(props);
 }function FaToggleOff (props) {
@@ -121,34 +123,42 @@ const Content = () => {
         setIsToggling(true);
         try {
             await toggleController(currentStatus, id);
-            await new Promise((resolve) => setTimeout(resolve, 1000));
+            // We wachten kort zodat de backend de tijd heeft voor de hardware handshake
+            await new Promise((resolve) => setTimeout(resolve, 800));
             await refreshStatus();
         }
         finally {
             setIsToggling(false);
         }
     };
-    // --- SAFEGUARD LOGICA ---
     const activeExternalCount = externalCtrls.filter(c => c.is_bound).length;
-    // Interne knop disabled als er geen externe actieve controllers zijn
     const internalDisabled = isToggling || (isBound && activeExternalCount === 0);
-    return (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(DFL.PanelSection, { title: "Internal Controller", children: SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => handleToggle(isBound, "internal"), disabled: internalDisabled, children: SP_JSX.jsxs("div", { style: {
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                gap: "10px",
-                                opacity: internalDisabled ? 0.5 : 1
-                            }, children: [isBound ? SP_JSX.jsx(FaToggleOn, { color: "#66ff66" }) : SP_JSX.jsx(FaToggleOff, { color: "#ff4444" }), isToggling ? "Wait..." : (isBound ? "Internal: ACTIVE" : "Internal: HIDDEN")] }) }) }) }), SP_JSX.jsx(DFL.PanelSection, { title: "External Devices", children: externalCtrls.length === 0 ? (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { opacity: 0.5, textAlign: "center", width: "100%", padding: "10px" }, children: "No external hardware found" }) })) : (externalCtrls.map((ctrl) => {
-                    // SAFEGUARD: Disable disconnect als intern UIT staat en dit de laatste externe is
+    return (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsxs(DFL.PanelSection, { title: "Internal Controller", children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => handleToggle(isBound, "internal"), disabled: internalDisabled, children: SP_JSX.jsxs("div", { style: {
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    gap: "10px",
+                                    opacity: internalDisabled ? 0.5 : 1
+                                }, children: [isBound ? SP_JSX.jsx(FaToggleOn, { color: "#66ff66" }) : SP_JSX.jsx(FaToggleOff, { color: "#ff4444" }), isToggling ? "Processing..." : (isBound ? "Internal: ACTIVE" : "Internal: HIDDEN")] }) }) }), !isBound && activeExternalCount === 0 && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => handleToggle(false, "internal"), children: SP_JSX.jsxs("div", { style: { display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", color: "#facc15" }, children: [SP_JSX.jsx(FaLifeRing, {}), " Emergency Reset Controls"] }) }) }))] }), SP_JSX.jsx(DFL.PanelSection, { title: "External Devices", children: externalCtrls.length === 0 ? (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { opacity: 0.5, textAlign: "center", width: "100%", padding: "10px" }, children: "No controllers remembered" }) })) : (externalCtrls.map((ctrl) => {
                     const isLastController = !isBound && activeExternalCount <= 1;
                     const externalDisabled = isToggling || (ctrl.is_bound && isLastController);
-                    return (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsxs("div", { style: { display: "flex", flexDirection: "column", width: "100%", gap: "8px" }, children: [SP_JSX.jsxs("div", { style: { display: "flex", alignItems: "center", gap: "12px" }, children: [ctrl.type === "Bluetooth" ? SP_JSX.jsx(FaBluetooth, { color: "#3b82f6" }) : SP_JSX.jsx(FaGamepad, { color: "#3b82f6" }), SP_JSX.jsx("div", { style: { fontWeight: "bold", flexGrow: 1 }, children: ctrl.name })] }), SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => handleToggle(ctrl.is_bound, ctrl.id), disabled: externalDisabled, children: SP_JSX.jsxs("div", { style: {
+                    // UI styling voor 'offline' apparaten
+                    const isOffline = !ctrl.is_bound;
+                    return (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsxs("div", { style: {
+                                display: "flex",
+                                flexDirection: "column",
+                                width: "100%",
+                                gap: "8px",
+                                padding: "4px 0",
+                                opacity: isOffline ? 0.6 : 1
+                            }, children: [SP_JSX.jsxs("div", { style: { display: "flex", alignItems: "center", gap: "12px" }, children: [ctrl.type === "Bluetooth" ?
+                                            SP_JSX.jsx(FaBluetooth, { color: isOffline ? "#555" : "#3b82f6" }) :
+                                            SP_JSX.jsx(FaGamepad, { color: isOffline ? "#555" : "#3b82f6" }), SP_JSX.jsxs("div", { style: { flexGrow: 1 }, children: [SP_JSX.jsx("div", { style: { fontWeight: "bold" }, children: ctrl.name }), SP_JSX.jsx("div", { style: { fontSize: "0.8em", opacity: 0.7 }, children: isOffline ? "Offline / Disconnected" : `Active ${ctrl.type}` })] })] }), SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => handleToggle(ctrl.is_bound, ctrl.id), disabled: externalDisabled, children: SP_JSX.jsxs("div", { style: {
                                             display: "flex",
                                             alignItems: "center",
                                             justifyContent: "center",
-                                            gap: "10px",
-                                            opacity: externalDisabled ? 0.5 : 1
-                                        }, children: [ctrl.is_bound ? SP_JSX.jsx(FaUnlink, { color: "#ff4444" }) : SP_JSX.jsx(FaLink, { color: "#66ff66" }), ctrl.is_bound ? "Disconnect" : "Connect"] }) })] }) }, ctrl.id));
+                                            gap: "10px"
+                                        }, children: [ctrl.is_bound ? SP_JSX.jsx(FaUnlink, { color: "#ff4444" }) : SP_JSX.jsx(FaLink, { color: "#66ff66" }), ctrl.is_bound ? "Disconnect" : "Reconnect"] }) })] }) }, ctrl.id));
                 })) })] }));
 };
 var index = definePlugin(() => ({
