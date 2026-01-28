@@ -1,5 +1,5 @@
 # ControllerPriority (Decky Plugin)
-![GitHub release (latest by date)](https://img.shields.io/github/v/release/FGOD/ControllerPriority)
+![GitHub release (latest by date)](https://img.shields.io/github/v/release/FGOD1983/ControllerPriority)
 
 # Support
 Hey if you like what I did with this, :beers: or a :pizza: would be nice :D
