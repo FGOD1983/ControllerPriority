@@ -1,16 +1,18 @@
 import { ButtonItem, PanelSection, PanelSectionRow } from "@decky/ui";
 import { definePlugin, callable } from "@decky/api";
-import { useState, FC, useEffect } from "react";
+import { useState, FC, useEffect, useRef } from "react";
 import { FaGamepad, FaToggleOn, FaToggleOff, FaLink, FaUnlink, FaBluetooth, FaLifeRing } from "react-icons/fa";
 
 const checkBindStatus = callable<[], boolean>("check_bind_status");
 const toggleController = callable<[boolean, string], boolean>("toggle_controller");
 const getExternalControllers = callable<[], any[]>("get_external_controllers");
+const getUpdateInfo = callable<[], string | null>("get_update_info");
 
 const Content: FC = () => {
   const [isBound, setIsBound] = useState<boolean>(true);
   const [externalCtrls, setExternalCtrls] = useState<any[]>([]);
   const [isToggling, setIsToggling] = useState<boolean>(false);
+  const hasCheckedUpdate = useRef(false);
 
   const refreshStatus = async () => {
     try {
@@ -25,6 +27,28 @@ const Content: FC = () => {
 
   useEffect(() => {
     refreshStatus();
+
+    // Achtergrond update check (Toast)
+    if (!hasCheckedUpdate.current) {
+      hasCheckedUpdate.current = true;
+      getUpdateInfo().then((newVersion) => {
+        if (newVersion) {
+          // We gebruiken de Toaster via de globale SteamClient als serverApi niet beschikbaar is
+          // Of we gebruiken een simpele notificatie binnen de UI
+          console.log("ControllerPriority: New version available v" + newVersion);
+          // @ts-ignore
+          if (window.SteamClient?.Toaster) {
+             // @ts-ignore
+            window.SteamClient.Toaster.Toast({
+              title: "Controller Priority",
+              body: `Update available: v${newVersion}`,
+              duration: 10
+            });
+          }
+        }
+      }).catch(e => console.error("Update check error:", e));
+    }
+
     const interval = setInterval(refreshStatus, 2000);
     return () => clearInterval(interval);
   }, []);
@@ -33,7 +57,6 @@ const Content: FC = () => {
     setIsToggling(true);
     try {
       await toggleController(currentStatus, id);
-      // We wachten kort zodat de backend de tijd heeft voor de hardware handshake
       await new Promise((resolve) => setTimeout(resolve, 800));
       await refreshStatus();
     } finally {
@@ -66,7 +89,6 @@ const Content: FC = () => {
           </ButtonItem>
         </PanelSectionRow>
 
-        {/* Emergency Fix Knop - Alleen zichtbaar als alles verborgen is of als backup */}
         {!isBound && activeExternalCount === 0 && (
           <PanelSectionRow>
             <ButtonItem
@@ -92,8 +114,6 @@ const Content: FC = () => {
           externalCtrls.map((ctrl) => {
             const isLastController = !isBound && activeExternalCount <= 1;
             const externalDisabled = isToggling || (ctrl.is_bound && isLastController);
-            
-            // UI styling voor 'offline' apparaten
             const isOffline = !ctrl.is_bound;
 
             return (

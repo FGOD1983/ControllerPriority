@@ -99,10 +99,12 @@ function FaBluetooth (props) {
 const checkBindStatus = callable("check_bind_status");
 const toggleController = callable("toggle_controller");
 const getExternalControllers = callable("get_external_controllers");
+const getUpdateInfo = callable("get_update_info");
 const Content = () => {
     const [isBound, setIsBound] = SP_REACT.useState(true);
     const [externalCtrls, setExternalCtrls] = SP_REACT.useState([]);
     const [isToggling, setIsToggling] = SP_REACT.useState(false);
+    const hasCheckedUpdate = SP_REACT.useRef(false);
     const refreshStatus = async () => {
         try {
             const bStatus = await checkBindStatus();
@@ -116,6 +118,26 @@ const Content = () => {
     };
     SP_REACT.useEffect(() => {
         refreshStatus();
+        // Achtergrond update check (Toast)
+        if (!hasCheckedUpdate.current) {
+            hasCheckedUpdate.current = true;
+            getUpdateInfo().then((newVersion) => {
+                if (newVersion) {
+                    // We gebruiken de Toaster via de globale SteamClient als serverApi niet beschikbaar is
+                    // Of we gebruiken een simpele notificatie binnen de UI
+                    console.log("ControllerPriority: New version available v" + newVersion);
+                    // @ts-ignore
+                    if (window.SteamClient?.Toaster) {
+                        // @ts-ignore
+                        window.SteamClient.Toaster.Toast({
+                            title: "Controller Priority",
+                            body: `Update available: v${newVersion}`,
+                            duration: 10
+                        });
+                    }
+                }
+            }).catch(e => console.error("Update check error:", e));
+        }
         const interval = setInterval(refreshStatus, 2000);
         return () => clearInterval(interval);
     }, []);
@@ -123,7 +145,6 @@ const Content = () => {
         setIsToggling(true);
         try {
             await toggleController(currentStatus, id);
-            // We wachten kort zodat de backend de tijd heeft voor de hardware handshake
             await new Promise((resolve) => setTimeout(resolve, 800));
             await refreshStatus();
         }
@@ -142,7 +163,6 @@ const Content = () => {
                                 }, children: [isBound ? SP_JSX.jsx(FaToggleOn, { color: "#66ff66" }) : SP_JSX.jsx(FaToggleOff, { color: "#ff4444" }), isToggling ? "Processing..." : (isBound ? "Internal: ACTIVE" : "Internal: HIDDEN")] }) }) }), !isBound && activeExternalCount === 0 && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => handleToggle(false, "internal"), children: SP_JSX.jsxs("div", { style: { display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", color: "#facc15" }, children: [SP_JSX.jsx(FaLifeRing, {}), " Emergency Reset Controls"] }) }) }))] }), SP_JSX.jsx(DFL.PanelSection, { title: "External Devices", children: externalCtrls.length === 0 ? (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { opacity: 0.5, textAlign: "center", width: "100%", padding: "10px" }, children: "No controllers remembered" }) })) : (externalCtrls.map((ctrl) => {
                     const isLastController = !isBound && activeExternalCount <= 1;
                     const externalDisabled = isToggling || (ctrl.is_bound && isLastController);
-                    // UI styling voor 'offline' apparaten
                     const isOffline = !ctrl.is_bound;
                     return (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsxs("div", { style: {
                                 display: "flex",
