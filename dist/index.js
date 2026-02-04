@@ -15,7 +15,8 @@ catch {
 if (api._version != API_VERSION) {
     console.warn(`[@decky/api] Requested API version ${API_VERSION} but the running loader only supports version ${api._version}. Some features may not work.`);
 }
-const callable = api.callable;
+const call = api.call;
+const toaster = api.toaster;
 const definePlugin = (fn) => {
     return (...args) => {
         return fn(...args);
@@ -96,55 +97,35 @@ function FaBluetooth (props) {
   return GenIcon({"attr":{"viewBox":"0 0 512 512"},"child":[{"tag":"path","attr":{"d":"M304.083 405.907c4.686 4.686 4.686 12.284 0 16.971l-44.674 44.674c-59.263 59.262-155.693 59.266-214.961 0-59.264-59.265-59.264-155.696 0-214.96l44.675-44.675c4.686-4.686 12.284-4.686 16.971 0l39.598 39.598c4.686 4.686 4.686 12.284 0 16.971l-44.675 44.674c-28.072 28.073-28.072 73.75 0 101.823 28.072 28.072 73.75 28.073 101.824 0l44.674-44.674c4.686-4.686 12.284-4.686 16.971 0l39.597 39.598zm-56.568-260.216c4.686 4.686 12.284 4.686 16.971 0l44.674-44.674c28.072-28.075 73.75-28.073 101.824 0 28.072 28.073 28.072 73.75 0 101.823l-44.675 44.674c-4.686 4.686-4.686 12.284 0 16.971l39.598 39.598c4.686 4.686 12.284 4.686 16.971 0l44.675-44.675c59.265-59.265 59.265-155.695 0-214.96-59.266-59.264-155.695-59.264-214.961 0l-44.674 44.674c-4.686 4.686-4.686 12.284 0 16.971l39.597 39.598zm234.828 359.28l22.627-22.627c9.373-9.373 9.373-24.569 0-33.941L63.598 7.029c-9.373-9.373-24.569-9.373-33.941 0L7.029 29.657c-9.373 9.373-9.373 24.569 0 33.941l441.373 441.373c9.373 9.372 24.569 9.372 33.941 0z"},"child":[]}]})(props);
 }
 
-const checkBindStatus = callable("check_bind_status");
-const toggleController = callable("toggle_controller");
-const getExternalControllers = callable("get_external_controllers");
-const getUpdateInfo = callable("get_update_info");
 const Content = () => {
     const [isBound, setIsBound] = SP_REACT.useState(true);
     const [externalCtrls, setExternalCtrls] = SP_REACT.useState([]);
     const [isToggling, setIsToggling] = SP_REACT.useState(false);
-    const hasCheckedUpdate = SP_REACT.useRef(false);
+    const [updateVersion, setUpdateVersion] = SP_REACT.useState("");
     const refreshStatus = async () => {
         try {
-            const bStatus = await checkBindStatus();
-            const ctrls = await getExternalControllers();
+            // V3 API: call returns result directly
+            const bStatus = await call("check_bind_status");
+            const ctrls = await call("get_external_controllers");
+            const updateData = await call("get_update_info");
             setIsBound(bStatus);
             setExternalCtrls(ctrls);
+            if (updateData?.version)
+                setUpdateVersion(updateData.version);
         }
         catch (e) {
-            console.error(e);
+            console.error("ControllerPriority UI Error:", e);
         }
     };
     SP_REACT.useEffect(() => {
         refreshStatus();
-        // Achtergrond update check (Toast)
-        if (!hasCheckedUpdate.current) {
-            hasCheckedUpdate.current = true;
-            getUpdateInfo().then((newVersion) => {
-                if (newVersion) {
-                    // We gebruiken de Toaster via de globale SteamClient als serverApi niet beschikbaar is
-                    // Of we gebruiken een simpele notificatie binnen de UI
-                    console.log("ControllerPriority: New version available v" + newVersion);
-                    // @ts-ignore
-                    if (window.SteamClient?.Toaster) {
-                        // @ts-ignore
-                        window.SteamClient.Toaster.Toast({
-                            title: "Controller Priority",
-                            body: `Update available: v${newVersion}`,
-                            duration: 10
-                        });
-                    }
-                }
-            }).catch(e => console.error("Update check error:", e));
-        }
         const interval = setInterval(refreshStatus, 2000);
         return () => clearInterval(interval);
     }, []);
     const handleToggle = async (currentStatus, id) => {
         setIsToggling(true);
         try {
-            await toggleController(currentStatus, id);
+            await call("toggle_controller", currentStatus, id);
             await new Promise((resolve) => setTimeout(resolve, 800));
             await refreshStatus();
         }
@@ -154,38 +135,34 @@ const Content = () => {
     };
     const activeExternalCount = externalCtrls.filter(c => c.is_bound).length;
     const internalDisabled = isToggling || (isBound && activeExternalCount === 0);
-    return (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsxs(DFL.PanelSection, { title: "Internal Controller", children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => handleToggle(isBound, "internal"), disabled: internalDisabled, children: SP_JSX.jsxs("div", { style: {
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    gap: "10px",
-                                    opacity: internalDisabled ? 0.5 : 1
-                                }, children: [isBound ? SP_JSX.jsx(FaToggleOn, { color: "#66ff66" }) : SP_JSX.jsx(FaToggleOff, { color: "#ff4444" }), isToggling ? "Processing..." : (isBound ? "Internal: ACTIVE" : "Internal: HIDDEN")] }) }) }), !isBound && activeExternalCount === 0 && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => handleToggle(false, "internal"), children: SP_JSX.jsxs("div", { style: { display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", color: "#facc15" }, children: [SP_JSX.jsx(FaLifeRing, {}), " Emergency Reset Controls"] }) }) }))] }), SP_JSX.jsx(DFL.PanelSection, { title: "External Devices", children: externalCtrls.length === 0 ? (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { opacity: 0.5, textAlign: "center", width: "100%", padding: "10px" }, children: "No controllers remembered" }) })) : (externalCtrls.map((ctrl) => {
-                    const isLastController = !isBound && activeExternalCount <= 1;
-                    const externalDisabled = isToggling || (ctrl.is_bound && isLastController);
-                    const isOffline = !ctrl.is_bound;
-                    return (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsxs("div", { style: {
-                                display: "flex",
-                                flexDirection: "column",
-                                width: "100%",
-                                gap: "8px",
-                                padding: "4px 0",
-                                opacity: isOffline ? 0.6 : 1
-                            }, children: [SP_JSX.jsxs("div", { style: { display: "flex", alignItems: "center", gap: "12px" }, children: [ctrl.type === "Bluetooth" ?
-                                            SP_JSX.jsx(FaBluetooth, { color: isOffline ? "#555" : "#3b82f6" }) :
-                                            SP_JSX.jsx(FaGamepad, { color: isOffline ? "#555" : "#3b82f6" }), SP_JSX.jsxs("div", { style: { flexGrow: 1 }, children: [SP_JSX.jsx("div", { style: { fontWeight: "bold" }, children: ctrl.name }), SP_JSX.jsx("div", { style: { fontSize: "0.8em", opacity: 0.7 }, children: isOffline ? "Offline / Disconnected" : `Active ${ctrl.type}` })] })] }), SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => handleToggle(ctrl.is_bound, ctrl.id), disabled: externalDisabled, children: SP_JSX.jsxs("div", { style: {
-                                            display: "flex",
-                                            alignItems: "center",
-                                            justifyContent: "center",
-                                            gap: "10px"
-                                        }, children: [ctrl.is_bound ? SP_JSX.jsx(FaUnlink, { color: "#ff4444" }) : SP_JSX.jsx(FaLink, { color: "#66ff66" }), ctrl.is_bound ? "Disconnect" : "Reconnect"] }) })] }) }, ctrl.id));
-                })) })] }));
+    return (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsxs(DFL.PanelSection, { title: "Internal Controller", children: [updateVersion && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsxs("div", { style: { color: "#66ff66", textAlign: "center", fontSize: "0.85em", padding: "5px", border: "1px solid #66ff6633", borderRadius: "4px", fontWeight: "bold" }, children: ["Update v", updateVersion, " available!"] }) })), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => handleToggle(isBound, "internal"), disabled: internalDisabled, children: SP_JSX.jsxs("div", { style: { display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", opacity: internalDisabled ? 0.5 : 1 }, children: [isBound ? SP_JSX.jsx(FaToggleOn, { color: "#66ff66" }) : SP_JSX.jsx(FaToggleOff, { color: "#ff4444" }), isToggling ? "Processing..." : (isBound ? "Internal: ACTIVE" : "Internal: HIDDEN")] }) }) }), !isBound && activeExternalCount === 0 && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => handleToggle(false, "internal"), children: SP_JSX.jsxs("div", { style: { display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", color: "#facc15" }, children: [SP_JSX.jsx(FaLifeRing, {}), " Emergency Reset"] }) }) }))] }), SP_JSX.jsx(DFL.PanelSection, { title: "External Devices", children: externalCtrls.length === 0 ? (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { opacity: 0.5, textAlign: "center", width: "100%", padding: "10px" }, children: "No controllers remembered" }) })) : (externalCtrls.map((ctrl) => (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsxs("div", { style: { display: "flex", flexDirection: "column", width: "100%", gap: "8px", padding: "4px 0", opacity: !ctrl.is_bound ? 0.6 : 1 }, children: [SP_JSX.jsxs("div", { style: { display: "flex", alignItems: "center", gap: "12px" }, children: [ctrl.type === "Bluetooth" ? SP_JSX.jsx(FaBluetooth, { color: !ctrl.is_bound ? "#555" : "#3b82f6" }) : SP_JSX.jsx(FaGamepad, { color: !ctrl.is_bound ? "#555" : "#3b82f6" }), SP_JSX.jsxs("div", { style: { flexGrow: 1 }, children: [SP_JSX.jsx("div", { style: { fontWeight: "bold" }, children: ctrl.name }), SP_JSX.jsx("div", { style: { fontSize: "0.8em", opacity: 0.7 }, children: !ctrl.is_bound ? "Offline" : `Active ${ctrl.type}` })] })] }), SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => handleToggle(ctrl.is_bound, ctrl.id), disabled: isToggling || (ctrl.is_bound && !isBound && activeExternalCount <= 1), children: SP_JSX.jsxs("div", { style: { display: "flex", alignItems: "center", justifyContent: "center", gap: "10px" }, children: [ctrl.is_bound ? SP_JSX.jsx(FaUnlink, { color: "#ff4444" }) : SP_JSX.jsx(FaLink, { color: "#66ff66" }), ctrl.is_bound ? "Disconnect" : "Reconnect"] }) })] }) }, ctrl.id)))) })] }));
 };
-var index = definePlugin(() => ({
-    name: "ControllerPriority",
-    content: SP_JSX.jsx(Content, {}),
-    icon: SP_JSX.jsx(FaGamepad, {})
-}));
+var index = definePlugin(() => {
+    const backgroundInterval = setInterval(async () => {
+        try {
+            const updateData = await call("get_update_info");
+            if (updateData?.show_toast) {
+                toaster.toast({
+                    title: "Controller Priority",
+                    body: `Update v${updateData.version} available!`,
+                    duration: 10000,
+                });
+                await call("reset_update_toast");
+            }
+        }
+        catch (e) {
+            // Background silent error
+        }
+    }, 10000);
+    return {
+        name: "ControllerPriority",
+        content: SP_JSX.jsx(Content, {}),
+        icon: SP_JSX.jsx(FaGamepad, {}),
+        onDismount: () => {
+            clearInterval(backgroundInterval);
+        }
+    };
+});
 
 export { index as default };
 //# sourceMappingURL=index.js.map
