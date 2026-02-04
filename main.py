@@ -2,6 +2,9 @@ import os
 import re
 import asyncio
 import logging
+import json
+import urllib.request
+import time
 
 # Configuration
 INPUT_DEVICES = "/proc/bus/input/devices"
@@ -15,6 +18,12 @@ class Plugin:
     tracked_usb_devices = {} 
     tracked_bt_devices = {}  
     _monitor_task = None
+    
+    # Update check variabelen
+    new_version_available = None
+    last_update_check = 0
+    # VERVANG DEZE URL door de link naar jouw eigen package.json op GitHub
+    VERSION_URL = "https://raw.githubusercontent.com/FGOD1983/ControllerPriority/refs/heads/main/package.json"
 
     async def _listen_for_sleep(self):
         """Monitor system sleep/resume signals via DBUS."""
@@ -40,6 +49,34 @@ class Plugin:
         except Exception as e:
             logging.error(f"ControllerPriority: DBUS Monitor Error: {e}")
 
+    async def check_for_updates(self):
+        """Checks GitHub for a newer version once every 24 hours."""
+        now = time.time()
+        if now - self.last_update_check < 86400:
+            return self.new_version_available
+
+        self.last_update_check = now
+        try:
+            local_path = os.path.join(os.path.dirname(__file__), "package.json")
+            with open(local_path, 'r') as f:
+                local_v = json.load(f).get("version")
+
+            with urllib.request.urlopen(self.VERSION_URL, timeout=5) as res:
+                remote_v = json.load(res).get("version")
+
+            if remote_v and remote_v != local_v:
+                logging.info(f"ControllerPriority: Update found! Local: {local_v}, Remote: {remote_v}")
+                self.new_version_available = remote_v
+            else:
+                self.new_version_available = None
+        except Exception as e:
+            logging.error(f"ControllerPriority: Update check failed: {e}")
+        
+        return self.new_version_available
+
+    async def get_update_info(self):
+        return self.new_version_available
+
     async def _get_bluetooth_status(self):
         connected_macs = []
         paired_map = {}
@@ -49,37 +86,30 @@ class Plugin:
             for line in out_p.decode().split('\n'):
                 if "Device" in line:
                     parts = line.split(' ', 2)
-                    if len(parts) >= 3:
-                        paired_map[parts[1].strip()] = parts[2].strip()
+                    if len(parts) >= 3: paired_map[parts[1].strip()] = parts[2].strip()
 
             proc_c = await asyncio.create_subprocess_exec("bluetoothctl", "devices", "Connected", stdout=asyncio.subprocess.PIPE)
             out_c, _ = await proc_c.communicate()
             for line in out_c.decode().split('\n'):
                 if "Device" in line:
                     parts = line.split(' ', 2)
-                    if len(parts) >= 2:
-                        connected_macs.append(parts[1].strip())
+                    if len(parts) >= 2: connected_macs.append(parts[1].strip())
         except: pass
         return connected_macs, paired_map
 
     async def get_external_controllers(self):
         current_list = []
         bt_connected, bt_paired = await self._get_bluetooth_status()
-        
         blocks = []
         if os.path.exists(INPUT_DEVICES):
-            with open(INPUT_DEVICES, "r") as f:
-                blocks = f.read().split("\n\n")
+            with open(INPUT_DEVICES, "r") as f: blocks = f.read().split("\n\n")
 
         active_now_ids = []
         for block in blocks:
-            if "EV=20000b" not in block or INTERNAL_USB_ID in block:
-                continue
-            
+            if "EV=20000b" not in block or INTERNAL_USB_ID in block: continue
             name_match = re.search(r'N: Name="([^"]+)"', block)
             bus_match = re.search(r'I: .*Bus=([0-9a-fA-F]+)', block)
             sysfs_match = re.search(r'S: Sysfs=(.*)', block)
-            
             if not name_match or not bus_match: continue
             name, bus = name_match.group(1), bus_match.group(1).lower()
 
@@ -90,7 +120,6 @@ class Plugin:
                         current_list.append({"id": mac, "name": name, "type": "Bluetooth", "is_bound": True})
                         active_now_ids.append(mac)
                         break
-            
             elif bus == "0003" and sysfs_match:
                 usb_match = re.search(r'/([0-9.-]+):\d+\.\d+', sysfs_match.group(1))
                 if usb_match:
@@ -110,7 +139,6 @@ class Plugin:
                 if mac in bt_paired:
                     current_list.append({"id": mac, "name": name, "type": "Bluetooth", "is_bound": False})
                 else: del self.tracked_bt_devices[mac]
-
         return current_list
 
     async def toggle_controller(self, current_status: bool, target_id: str):
@@ -118,6 +146,7 @@ class Plugin:
         self.is_processing = True
         try:
             if ":" in target_id and "-" not in target_id:
+                logging.info(f"ControllerPriority: Toggling BT device {target_id} to {'Disconnected' if current_status else 'Connected'}")
                 cmd = "disconnect" if current_status else "connect"
                 await asyncio.create_subprocess_exec("bluetoothctl", cmd, target_id)
                 await asyncio.sleep(1.5)
@@ -125,6 +154,7 @@ class Plugin:
             
             usb_id = INTERNAL_USB_ID if target_id == "internal" else target_id
             action = "unbind" if current_status else "bind"
+            logging.info(f"ControllerPriority: Setting {target_id} ({usb_id}) to {action}")
             path = f"{USB_DRIVER_PATH}/{action}"
             
             if os.path.exists(path):
@@ -132,19 +162,24 @@ class Plugin:
                 if (action == "bind" and not is_bound) or (action == "unbind" and is_bound):
                     with open(path, "w") as f: f.write(usb_id)
             return True
-        finally:
-            self.is_processing = False
+        except Exception as e:
+            logging.error(f"ControllerPriority: Toggle error: {e}")
+            return False
+        finally: self.is_processing = False
 
     async def check_bind_status(self):
         return os.path.exists(f"{USB_DEVICES_ROOT}/{INTERNAL_USB_ID}/driver")
 
     async def _unload(self):
-        """Clean up when plugin is disabled or reloaded."""
-        if self._monitor_task:
-            self._monitor_task.cancel()
+        logging.info("ControllerPriority: Unloading plugin...")
+        if self._monitor_task: self._monitor_task.cancel()
 
     async def _main(self):
         self._monitor_task = asyncio.create_task(self._listen_for_sleep())
+        
+        # Eerste update check na een korte delay voor netwerkstabiliteit
+        await asyncio.sleep(20)
+        await self.check_for_updates()
         
         while True:
             try:
@@ -155,15 +190,16 @@ class Plugin:
                 if self.last_external_count != -1:
                     if self.last_external_count == 0 and active_ext_count > 0:
                         if is_internal_alive: 
-                            logging.info("ControllerPriority: External controller connected. Disabling internal.")
+                            logging.info(f"ControllerPriority: {active_ext_count} external controller(s) detected. Disabling internal.")
                             await self.toggle_controller(True, "internal")
                     elif self.last_external_count > 0 and active_ext_count == 0:
                         if not is_internal_alive: 
-                            logging.info("ControllerPriority: No external controllers. Restoring internal.")
+                            logging.info("ControllerPriority: No active external controllers. Enabling internal.")
                             await self.toggle_controller(False, "internal")
 
                 self.last_external_count = active_ext_count
+                await self.check_for_updates()
             except Exception as e:
-                logging.error(f"ControllerPriority: Loop Error: {e}")
+                logging.error(f"ControllerPriority: Main Loop Error: {e}")
             
             await asyncio.sleep(1)

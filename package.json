@@ -1,6 +1,6 @@
 {
   "name": "controller-priority",
-  "version": "1.2.6",
+  "version": "1.2.7",
   "description": "Give priority to external controllers by disabling the internal Steam Deck controls.",
   "type": "module",
   "author": "FGOD1983",
