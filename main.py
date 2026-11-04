@@ -11,14 +11,15 @@ import socket
 # Configuration
 INPUT_DEVICES = "/proc/bus/input/devices"
 INTERNAL_USB_ID = "3-3"
-USB_DRIVER_PATH = "/sys/bus/usb/drivers/usb"
+# changed to usbhid for selective interface toggling
+USB_DRIVER_PATH = "/sys/bus/usb/drivers/usbhid"
 USB_DEVICES_ROOT = "/sys/bus/usb/devices"
 
 class Plugin:
     last_external_count = -1
     is_processing = False
-    tracked_usb_devices = {} 
-    tracked_bt_devices = {}  
+    tracked_usb_devices = {}
+    tracked_bt_devices = {}
     _monitor_task = None
 
     # --- Update Variables ---
@@ -37,7 +38,7 @@ class Plugin:
             return False
 
     def version_tuple(self, v):
-        """Converts version string like '1.2.7' to a comparable tuple (1, 2, 7)."""
+        # Converts a version string like '1.2.7' to a comparable tuple (1, 2, 7).
         try:
             return tuple(map(int, (v.split('.'))))
         except:
@@ -63,7 +64,6 @@ class Plugin:
                     logging.info(f"ControllerPriority: New update available v{remote_v} (Current: v{current_v})")
                 return True
             else:
-                # Version is equal or lower (dev version), do not show toast
                 self.new_version_available = None
                 self.is_waiting_for_toast = False
                 return False
@@ -86,7 +86,7 @@ class Plugin:
 
     # --- ORIGINAL CONTROLLER LOGIC ---
     async def _listen_for_sleep(self):
-        """Monitor system sleep/resume signals via DBUS."""
+        # Monitor system sleep/resume signals via DBUS.
         logging.info("ControllerPriority: DBUS Sleep Monitor started.")
         try:
             proc = await asyncio.create_subprocess_exec(
@@ -104,7 +104,6 @@ class Plugin:
                     self.last_external_count = -1
                     await self.toggle_controller(False, "internal")
                     os.system("udevadm trigger")
-                    # Check for update after wake
                     await asyncio.sleep(5)
                     if self.has_internet():
                         await self.perform_update_check()
@@ -132,13 +131,14 @@ class Plugin:
                     parts = line.split(' ', 2)
                     if len(parts) >= 2:
                         connected_macs.append(parts[1].strip())
-        except: pass
+        except Exception as e:
+            logging.error(f"ControllerPriority: Bluetooth status error: {e}")
         return connected_macs, paired_map
 
     async def get_external_controllers(self):
         current_list = []
         bt_connected, bt_paired = await self._get_bluetooth_status()
-        
+
         blocks = []
         if os.path.exists(INPUT_DEVICES):
             with open(INPUT_DEVICES, "r") as f:
@@ -146,13 +146,15 @@ class Plugin:
 
         active_now_ids = []
         for block in blocks:
-            if "EV=20000b" not in block or INTERNAL_USB_ID in block:
+            # Fix: accepts now virtual (20000b) AND physical Bluetooth devices (20001b)
+
+            if not ("EV=20000b" in block or "EV=20001b" in block) or INTERNAL_USB_ID in block:
                 continue
-            
+
             name_match = re.search(r'N: Name="([^"]+)"', block)
             bus_match = re.search(r'I: .*Bus=([0-9a-fA-F]+)', block)
             sysfs_match = re.search(r'S: Sysfs=(.*)', block)
-            
+
             if not name_match or not bus_match: continue
             name, bus = name_match.group(1), bus_match.group(1).lower()
 
@@ -163,7 +165,7 @@ class Plugin:
                         current_list.append({"id": mac, "name": name, "type": "Bluetooth", "is_bound": True})
                         active_now_ids.append(mac)
                         break
-            
+
             elif bus == "0003" and sysfs_match:
                 usb_match = re.search(r'/([0-9.-]+):\d+\.\d+', sysfs_match.group(1))
                 if usb_match:
@@ -186,57 +188,92 @@ class Plugin:
 
         return current_list
 
+    async def check_bind_status(self) -> bool:
+        # Checks whether the Gamepad Interface (:1.2) is currently active/bound.
+        target_path = f"{USB_DRIVER_PATH}/{INTERNAL_USB_ID}:1.2"
+        return os.path.exists(target_path)
+
     async def toggle_controller(self, current_status: bool, target_id: str):
-        if self.is_processing: return False
+        # Toggles the Gamepad Interface of the Steam Deck on/off.
+        # current_status: True = deactivate controller (unbind)
+        # False = activate controller (bind)
+        if self.is_processing:
+            return False
+
         self.is_processing = True
+        success = True
+
+        usb_id = INTERNAL_USB_ID if target_id == "internal" else target_id
+        action = "unbind" if current_status else "bind"
+        path = f"{USB_DRIVER_PATH}/{action}"
+
+        # Targeted shutdown of interface :1.2 (Gamepad-HID)
+        if target_id == "internal":
+            targets = [f"{usb_id}:1.2"]
+        else:
+            targets = [usb_id]
+
         try:
-            if ":" in target_id and "-" not in target_id:
-                cmd = "disconnect" if current_status else "connect"
-                await asyncio.create_subprocess_exec("bluetoothctl", cmd, target_id)
-                await asyncio.sleep(1.5)
-                return True
-            
-            usb_id = INTERNAL_USB_ID if target_id == "internal" else target_id
-            action = "unbind" if current_status else "bind"
-            path = f"{USB_DRIVER_PATH}/{action}"
-            
             if os.path.exists(path):
-                is_bound = os.path.exists(f"{USB_DEVICES_ROOT}/{usb_id}/driver")
-                if (action == "bind" and not is_bound) or (action == "unbind" and is_bound):
-                    with open(path, "w") as f: f.write(usb_id)
-            return True
+                for target in targets:
+                    is_bound = os.path.exists(f"{USB_DRIVER_PATH}/{target}")
+
+                    if (action == "bind" and not is_bound) or (action == "unbind" and is_bound):
+                        logging.info(f"ControllerPriority: Performing {action} on target: {target}")
+                        with open(path, "w") as f:
+                            f.write(target)
+            else:
+                logging.error(f"ControllerPriority: Driver path {path} does not exist.")
+                success = False
+
+            await asyncio.sleep(0.5)
+
+        except Exception as e:
+            logging.error(f"ControllerPriority: Error running {action} for {target_id}: {e}")
+            success = False
         finally:
             self.is_processing = False
 
-    async def check_bind_status(self):
-        return os.path.exists(f"{USB_DEVICES_ROOT}/{INTERNAL_USB_ID}/driver")
+        return success
 
     async def _unload(self):
+        # Executed when the plugin is stopped or disabled.
+        logging.info("ControllerPriority: Plugin unloading. Restoring internal controls...")
         if self._monitor_task:
             self._monitor_task.cancel()
+        # Forces the internal controller back ON (current_status=False)
+        await self.toggle_controller(False, "internal")
 
     async def _main(self):
         self._monitor_task = asyncio.create_task(self._listen_for_sleep())
-        
+
         while True:
             try:
+                # 1. Retrieve all currently detected controllers
                 ctrls = await self.get_external_controllers()
+
+                # 2. Only count controllers that are actually connected/bound and active (is_bound)
                 active_ext_count = len([c for c in ctrls if c["is_bound"]])
+
+                # 3. Check whether the internal Steam Deck gamepad is currently active (:1.2)
                 is_internal_alive = await self.check_bind_status()
 
-                if self.last_external_count != -1:
-                    if self.last_external_count == 0 and active_ext_count > 0:
-                        if is_internal_alive: 
-                            logging.info("ControllerPriority: External controller connected. Disabling internal.")
-                            await self.toggle_controller(True, "internal")
-                    elif self.last_external_count > 0 and active_ext_count == 0:
-                        if not is_internal_alive: 
-                            logging.info("ControllerPriority: No external controllers. Restoring internal.")
-                            await self.toggle_controller(False, "internal")
+                # --- FIX: Dynamic state synchronization for Bluetooth & USB ---
+                if active_ext_count > 0:
+                    # If at least one external controller is active, the internal one must be disabled
+                    if is_internal_alive and not self.is_processing:
+                        logging.info(f"ControllerPriority: {active_ext_count} external controller(s) detected. Automatically disabling internal gamepad.")
+                        await self.toggle_controller(True, "internal")
+                else:
+                    # If no external controller is active anymore, the internal one must be re-enabled
+                    if not is_internal_alive and not self.is_processing:
+                        logging.info("ControllerPriority: No external controllers detected. Automatically restoring internal gamepad.")
+                        await self.toggle_controller(False, "internal")
 
+                # Updates the internal status tracking counter
                 self.last_external_count = active_ext_count
 
-                # Periodic Update Check (every 10 min)
+                # --- PERIODIC UPDATE CHECK (Every 10 minutes) ---
                 now = time.time()
                 if now - self.last_internet_check > 600:
                     if self.has_internet():
@@ -244,6 +281,8 @@ class Plugin:
                         self.last_internet_check = now
 
             except Exception as e:
-                logging.error(f"ControllerPriority: Loop Error: {e}")
-            
+                logging.error(f"ControllerPriority: Loop Error in _main: {e}")
+
+            # Waits exactly 1 second until the next scan
             await asyncio.sleep(1)
+
