@@ -18,6 +18,7 @@ USB_DEVICES_ROOT = "/sys/bus/usb/devices"
 class Plugin:
     last_external_count = -1
     is_processing = False
+    auto_mode = True
     tracked_usb_devices = {}
     tracked_bt_devices = {}
     _monitor_task = None
@@ -84,6 +85,14 @@ class Plugin:
         logging.info("ControllerPriority: Update toast flag reset.")
         return True
 
+    async def get_auto_mode(self):
+        return self.auto_mode
+
+    async def set_auto_mode(self, enabled: bool):
+        self.auto_mode = enabled
+        logging.info(f"ControllerPriority: Automatic mode {'enabled' if enabled else 'disabled'}.")
+        return self.auto_mode
+
     # --- ORIGINAL CONTROLLER LOGIC ---
     async def _listen_for_sleep(self):
         # Monitor system sleep/resume signals via DBUS.
@@ -98,11 +107,13 @@ class Plugin:
                 if not line: break
                 if b"boolean true" in line:
                     logging.info("ControllerPriority: DBUS signal - System SUSPENDING. Restoring internal controls...")
-                    await self.toggle_controller(False, "internal")
+                    if self.auto_mode:
+                        await self.toggle_controller(False, "internal")
                 elif b"boolean false" in line:
                     logging.info("ControllerPriority: DBUS signal - System RESUMING. Resetting state...")
                     self.last_external_count = -1
-                    await self.toggle_controller(False, "internal")
+                    if self.auto_mode:
+                        await self.toggle_controller(False, "internal")
                     os.system("udevadm trigger")
                     await asyncio.sleep(5)
                     if self.has_internet():
@@ -258,17 +269,18 @@ class Plugin:
                 # 3. Check whether the internal Steam Deck gamepad is currently active (:1.2)
                 is_internal_alive = await self.check_bind_status()
 
-                # --- FIX: Dynamic state synchronization for Bluetooth & USB ---
-                if active_ext_count > 0:
-                    # If at least one external controller is active, the internal one must be disabled
-                    if is_internal_alive and not self.is_processing:
-                        logging.info(f"ControllerPriority: {active_ext_count} external controller(s) detected. Automatically disabling internal gamepad.")
-                        await self.toggle_controller(True, "internal")
-                else:
-                    # If no external controller is active anymore, the internal one must be re-enabled
-                    if not is_internal_alive and not self.is_processing:
-                        logging.info("ControllerPriority: No external controllers detected. Automatically restoring internal gamepad.")
-                        await self.toggle_controller(False, "internal")
+                if self.auto_mode:
+                    # --- FIX: Dynamic state synchronization for Bluetooth & USB ---
+                    if active_ext_count > 0:
+                        # If at least one external controller is active, the internal one must be disabled
+                        if is_internal_alive and not self.is_processing:
+                            logging.info(f"ControllerPriority: {active_ext_count} external controller(s) detected. Automatically disabling internal gamepad.")
+                            await self.toggle_controller(True, "internal")
+                    else:
+                        # If no external controller is active anymore, the internal one must be re-enabled
+                        if not is_internal_alive and not self.is_processing:
+                            logging.info("ControllerPriority: No external controllers detected. Automatically restoring internal gamepad.")
+                            await self.toggle_controller(False, "internal")
 
                 # Updates the internal status tracking counter
                 self.last_external_count = active_ext_count
@@ -285,4 +297,3 @@ class Plugin:
 
             # Waits exactly 1 second until the next scan
             await asyncio.sleep(1)
-
