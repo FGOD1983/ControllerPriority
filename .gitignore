@@ -1,2 +1,5 @@
 bash_test.sh
 bash_test2.sh
+node_modules
+.vscode/
+dist/
