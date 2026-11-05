@@ -20,8 +20,9 @@ Hey if you like what I did with this, :beers: or a :pizza: would be nice :D
     * **0 → 1**: Connect your first external controller (USB or BT), and the internal pad is automatically hidden.
     * **x → 0**: Disconnect all controllers (or unplug your dock), and the internal pad is instantly restored for safety.
     * **Always Active**: The auto-switch logic runs in a persistent background loop, working even when you are in-game or the plugin menu is closed.
-* **Safety Safeguards**: The UI intelligently prevents you from hiding the internal controller if no other active controller is detected, ensuring you are never left without a way to control your Deck.
+* **Automatic/Manual Modes**: Automatic mode is enabled by default. Turn it off to manually enable or disable the internal Steam Deck controller without the background service overriding your choice.
 * **Driver-Level Control**: Uses native Linux kernel `bind/unbind` for USB and `bluetoothctl` for wireless, leaving no "junk" files or permanent udev rules on your SteamOS partition.
+* **Safety Guard**: Hiding the internal gamepad does not disable the touchscreen. You can still use touch controls to open Decky and turn Auto mode off, then use the internal controller toggle to enable the built-in gamepad again. If it is hidden and no external controller is active, use **Emergency Reset** to turn Auto mode off and restore it.
 
 ## Installation
 
@@ -33,9 +34,10 @@ Hey if you like what I did with this, :beers: or a :pizza: would be nice :D
 ## Usage
 
 1. Open the Decky menu and select **ControllerPriority**.
-2. **Automatic Mode**: The plugin will automatically hide the internal pad whenever an external controller is connected.
-3. **Manual Control**: 
-    * Use the **Internal: ACTIVE/HIDDEN** toggle to manually override the Steam Deck's built-in controls.
+2. **Automatic Mode**: Use the **Auto mode: ON/OFF** button above the internal controller control. When enabled, the plugin automatically hides the internal pad when an external controller is connected and restores it when none are active.
+3. **Manual Control**:
+    * Turn **Auto mode** off to stop automatic controller management.
+    * Use the **Internal: ACTIVE/HIDDEN** toggle to enable or disable the Steam Deck's built-in controls manually.
     * Use the **Connect/Disconnect** buttons for individual external controllers to manage your session.
 
 > **Note**: This plugin no longer requires udev rules. If you used a previous udev-based solution, you can safely clean it up by running:  
