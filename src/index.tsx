@@ -11,6 +11,8 @@ const Content: FC = () => {
   const [isBound, setIsBound] = useState<boolean>(true);
   const [externalCtrls, setExternalCtrls] = useState<Controller[]>([]);
   const [isToggling, setIsToggling] = useState<boolean>(false);
+  const [autoMode, setAutoMode] = useState<boolean>(true);
+  const [isChangingAutoMode, setIsChangingAutoMode] = useState<boolean>(false);
   const [updateVersion, setUpdateVersion] = useState<string>("");
 
   const refreshStatus = async () => {
@@ -18,10 +20,12 @@ const Content: FC = () => {
       // V3 API: call returns result directly
       const bStatus = await call<[], boolean>("check_bind_status");
       const ctrls = await call<[], Controller[]>("get_external_controllers");
+      const currentAutoMode = await call<[], boolean>("get_auto_mode");
       const updateData = await call<[], UpdateInfo>("get_update_info");
 
       setIsBound(bStatus);
       setExternalCtrls(ctrls);
+      setAutoMode(currentAutoMode);
       if (updateData?.version) setUpdateVersion(updateData.version);
     } catch (e) {
       console.error("ControllerPriority UI Error:", e);
@@ -45,8 +49,45 @@ const Content: FC = () => {
     }
   };
 
+  const handleAutoModeToggle = async () => {
+    setIsChangingAutoMode(true);
+    try {
+      const enabled = await call<[boolean], boolean>("set_auto_mode", !autoMode);
+      setAutoMode(enabled);
+      await refreshStatus();
+    } catch (e) {
+      console.error("ControllerPriority auto-mode error:", e);
+    } finally {
+      setIsChangingAutoMode(false);
+    }
+  };
+
+  const handleEmergencyReset = async () => {
+    setIsToggling(true);
+    setIsChangingAutoMode(true);
+    try {
+      await call<[boolean], boolean>("set_auto_mode", false);
+      setAutoMode(false);
+      const restored = await call<[boolean, string], boolean>("toggle_controller", false, "internal");
+      if (!restored) throw new Error("The internal controller could not be restored.");
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      await refreshStatus();
+    } catch (e) {
+      console.error("ControllerPriority emergency reset error:", e);
+      toaster.toast({
+        title: "Controller Priority",
+        body: "Emergency reset failed. The internal controller may still be hidden.",
+        duration: 10000,
+      });
+      await refreshStatus();
+    } finally {
+      setIsToggling(false);
+      setIsChangingAutoMode(false);
+    }
+  };
+
   const activeExternalCount = externalCtrls.filter(c => c.is_bound).length;
-  const internalDisabled = isToggling || (isBound && activeExternalCount === 0);
+  const internalDisabled = isToggling || isChangingAutoMode || autoMode;
 
   return (
     <>
@@ -58,6 +99,14 @@ const Content: FC = () => {
              </div>
            </PanelSectionRow>
         )}
+        <PanelSectionRow>
+          <ButtonItem layout="below" onClick={handleAutoModeToggle} disabled={isChangingAutoMode || isToggling}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "10px" }}>
+              {autoMode ? <FaToggleOn color="#66ff66" /> : <FaToggleOff color="#ff4444" />}
+              {isChangingAutoMode ? "Updating..." : `Auto mode: ${autoMode ? "ON" : "OFF"}`}
+            </div>
+          </ButtonItem>
+        </PanelSectionRow>
         <PanelSectionRow>
           <ButtonItem
             layout="below"
@@ -73,9 +122,9 @@ const Content: FC = () => {
 
         {!isBound && activeExternalCount === 0 && (
           <PanelSectionRow>
-            <ButtonItem layout="below" onClick={() => handleToggle(false, "internal")}>
+            <ButtonItem layout="below" onClick={handleEmergencyReset} disabled={isToggling || isChangingAutoMode}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", color: "#facc15" }}>
-                <FaLifeRing /> Emergency Reset
+                <FaLifeRing /> {isToggling ? "Resetting..." : "Emergency Reset"}
               </div>
             </ButtonItem>
           </PanelSectionRow>
@@ -98,7 +147,7 @@ const Content: FC = () => {
                     <div style={{ fontSize: "0.8em", opacity: 0.7 }}>{!ctrl.is_bound ? "Offline" : `Active ${ctrl.type}`}</div>
                   </div>
                 </div>
-                <ButtonItem layout="below" onClick={() => handleToggle(ctrl.is_bound, ctrl.id)} disabled={isToggling || (ctrl.is_bound && !isBound && activeExternalCount <= 1)}>
+                <ButtonItem layout="below" onClick={() => handleToggle(ctrl.is_bound, ctrl.id)} disabled={autoMode || isToggling || isChangingAutoMode || (ctrl.is_bound && !isBound && activeExternalCount <= 1)}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "10px" }}>
                     {ctrl.is_bound ? <FaUnlink color="#ff4444" /> : <FaLink color="#66ff66" />}
                     {ctrl.is_bound ? "Disconnect" : "Reconnect"}
